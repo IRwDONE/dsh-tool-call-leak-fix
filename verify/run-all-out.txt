@@ -1,0 +1,107 @@
+### GIT HEAD
+6b0bf01 docs(D-9): R12 rewiring rules are future-tense, not current behaviour; drop the self-contradiction
+
+### HASHES BEFORE
+3de47da7d68190d66ed8d35d9142c21b112e21383e9ea7ebe8d40d8f67bdc6b7 *plugin/index.js
+4ea090ce921e181caca9f90e85f2da414812691b2e770bd0cd7c860bb2df5efb *plugin/src/detect.js
+4510ae71ecc39802a3696349e0a5f4a216dcfefa7f79aaedc2a0104452871321 *plugin/package.json
+11fd098c1919cce2a7986cb56912309b23ff879cc59f404f3671bf7def9c93dd *plugin/cordis.patch.yml
+8c101540f13ce606688ccebe5ed988a6aa4ea5103ec32dc5c037af759df959a9 *tests/run.mjs
+e91269d3f498c4205bd36e045c53f096153f294ee9f6c5c5347ca08985762fdf *docs/INTERFACE.md
+
+### node --check (all JS)
+SYNTAX OK  plugin/index.js
+SYNTAX OK  plugin/src/detect.js
+SYNTAX OK  tests/run.js
+SYNTAX OK  tests/run.mjs
+SYNTAX OK  tests/check-fixtures.mjs
+
+### package.json + locale JSON parse
+JSON OK  plugin/package.json @local/structured-output-guard
+JSON OK  plugin/locale/zh.json 结构化输出守卫
+JSON OK  plugin/locale/en.json Structured Output Guard
+
+### cordis.patch.yml insert check
+1:# New rows MUST be written as an `- insert:` list. A bare `- id: <new>` only
+3:- insert:
+PATCH: uses - insert:
+4:    - id: structured-output-guard
+
+### plugin/ file inventory (deliverables)
+plugin:
+total 61
+drwxr-xr-x 1 <user> 197609     0 Oct 29 22:47 .
+drwxr-xr-x 1 <user> 197609     0 Oct 28 23:34 ..
+-rw-r--r-- 1 <user> 197609 21164 Oct 29 22:47 README.md
+-rw-r--r-- 1 <user> 197609  1010 Oct 29 22:40 cordis.patch.yml
+-rw-r--r-- 1 <user> 197609   729 Oct 28 02:39 icon.svg
+-rw-r--r-- 1 <user> 197609 20437 Oct 29 22:40 index.js
+drwxr-xr-x 1 <user> 197609     0 Oct 28 02:39 locale
+-rw-r--r-- 1 <user> 197609   567 Oct 28 02:39 package.json
+drwxr-xr-x 1 <user> 197609     0 Oct 29 19:25 src
+
+plugin/locale:
+total 6
+drwxr-xr-x 1 <user> 197609   0 Oct 28 02:39 .
+drwxr-xr-x 1 <user> 197609   0 Oct 29 22:47 ..
+-rw-r--r-- 1 <user> 197609 264 Oct 28 02:39 en.json
+-rw-r--r-- 1 <user> 197609 263 Oct 28 02:39 zh.json
+
+plugin/src:
+total 44
+drwxr-xr-x 1 <user> 197609     0 Oct 29 19:25 .
+drwxr-xr-x 1 <user> 197609     0 Oct 29 22:47 ..
+-rw-r--r-- 1 <user> 197609 38668 Oct 29 19:25 detect.js
+
+### tests/run.mjs (author's harness, run by verifier)
+tests/run.mjs EXIT=0
+PASS  O9[R12 内置注记] 缺省注记按 lang 出中文/英文，且不含 payload
+PASS  O10[R12 索引与引用] 多消息混合：rewrites.index 精确、未改动消息复用引用、tool-call 消息不动
+PASS  O11[R12 纯函数] 幂等：同输入两次结果一致
+PASS  O12[R12 纯函数] 非数组 / 畸形元素 / 循环引用 / Proxy → changed:false、不抛异常
+PASS  O13[R12 形状] 返回值形状恒定：changed:boolean + messages + rewrites 数组
+
+== 汇总 ==
+PASS 182 / FAIL 0
+
+### verify/probe.mjs (independent detector probe)
+probe EXIT=0
+
+== 12. large-input performance (adversarial) ==
+PASS  5MB plain text: no throw, <5000ms
+PASS  5MB plain text: length reported
+PASS  5MB of closing tags: no throw, <5000ms
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=16.8
+PASS  ~2.6MB call markup via args: no throw, <5000ms
+  call-markup args: action=deny ms=23.7 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+PASS  pathological < / > flood: no throw, <5000ms
+PASS  pathological flood via args: no throw, <5000ms
+
+== SUMMARY ==
+PASS=436  FAIL=0  NOTES=3  DEFECTS=0
+
+--- raw snapshot ---
+frozenCodesProduced=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","INTERNAL_ERROR","MARKUP_LEAKED_AS_TEXT","MISSING_OPENING_MARKUP","PAYLOAD_TOO_LONG","SUSPICIOUS_NOOP_RESULT","TRUNCATED_PAYLOAD","UNPAIRED_CLOSING_TAG"]
+
+### verify/probe-index.mjs (independent index.js wiring probe)
+probe-index EXIT=0
+== 7. no payload text hardcoded / leaked into messages ==
+PASS  M1-removed: no prompt section is registered, so no prompt text can leak
+PASS  M1-removed: no registered prompt text contains the canary
+PASS  M4 injected correction contains no payload canary
+PASS  index.js source does not hardcode any fixture canary
+
+== 8. index.js module hygiene ==
+PASS  index.js source is non-empty and exports apply
+PASS  index.js has no top-level await import side effects (loads cleanly)
+
+== SUMMARY ==
+PASS=86  FAIL=0  NOTES=2  DEFECTS=0
+
+### HASHES AFTER (must equal BEFORE; a difference means the artifact moved during the run)
+3de47da7d68190d66ed8d35d9142c21b112e21383e9ea7ebe8d40d8f67bdc6b7 *plugin/index.js
+4ea090ce921e181caca9f90e85f2da414812691b2e770bd0cd7c860bb2df5efb *plugin/src/detect.js
+4510ae71ecc39802a3696349e0a5f4a216dcfefa7f79aaedc2a0104452871321 *plugin/package.json
+11fd098c1919cce2a7986cb56912309b23ff879cc59f404f3671bf7def9c93dd *plugin/cordis.patch.yml
+8c101540f13ce606688ccebe5ed988a6aa4ea5103ec32dc5c037af759df959a9 *tests/run.mjs
+e91269d3f498c4205bd36e045c53f096153f294ee9f6c5c5347ca08985762fdf *docs/INTERFACE.md

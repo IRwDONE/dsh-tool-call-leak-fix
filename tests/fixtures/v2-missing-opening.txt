@@ -1,0 +1,15 @@
+<parameter name="path">site/components/card.html</parameter>
+<parameter name="content">
+<article class="card">
+  <header class="card-head">
+    <h2 class="card-title">卡片标题</h2>
+  </header>
+  <div class="card-body">
+    <p class="card-text">这一段是被写入的正文内容。</p>
+  </div>
+  <footer class="card-foot">
+    <button type="button" class="btn">确定</button>
+  </footer>
+</article>
+</parameter>
+<parameter name="description">写入卡片组件的初始版本</parameter>

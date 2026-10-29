@@ -1,0 +1,22 @@
+# New rows MUST be written as an `- insert:` list. A bare `- id: <new>` only
+# overrides an existing row by id and is a silent no-op for a new one.
+- insert:
+    - id: structured-output-guard
+      name: '@local/structured-output-guard'
+      config:
+        enabled: true
+        maxLines: 100
+        maxChars: 20000
+        closingTagCount: 8
+        endSequenceRepeats: 2
+        maxCorrectionsPerTurn: 1
+        lang: zh
+        # R9 kill switch for the M3 no-op result check.
+        noopCheck: true
+        # R10 diagnostic switch: default OFF. Turn it on temporarily (then reload)
+        # to capture a real silent-failure, e.g. while validating R11.
+        debugLog: false
+        # R12/M5 is deliberately NOT exposed here: it cannot work on this harness
+        # build (D-8 — agent-loop hands llm/stream a deep-frozen request), so its
+        # wiring and its switch were removed. Only the implementation is kept, in
+        # src/detect.js (sanitizeMessages), ready for a future writable seam.

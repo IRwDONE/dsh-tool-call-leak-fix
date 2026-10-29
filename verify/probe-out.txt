@@ -1,0 +1,509 @@
+
+== 0. provenance ==
+detect.js   sha256[0:16]=4ea090ce921e181c  bytes=38668
+node        v24.19.0
+fixture     v1-end-multiplied.txt            bytes=  1360 lines=47 sha16=f122975dd6e3ccd1
+fixture     v2-missing-opening.txt           bytes=   496 lines=16 sha16=a0426795ad309a0d
+fixture     v3-leaked-markup.txt             bytes=   486 lines=14 sha16=510d40576795dc26
+fixture     ok-normal-html.txt               bytes=  1780 lines=53 sha16=ce8f1115c11dfd02
+fixture     ok-normal-js.txt                 bytes=  3585 lines=124 sha16=8550a9605bfb72c3
+fixture     ok-normal-markdown-table.txt     bytes=   621 lines=17 sha16=0a96fa859676e3b1
+fixture     ok-short-text-few-tags.txt       bytes=   191 lines=3 sha16=9dc2c270fa70d76f
+fixture     ok-single-end-sequence.txt       bytes=   156 lines=6 sha16=9d011a0e6c6f64fa
+
+== 1. exports + DEFAULT_CONFIG (INTERFACE §暴露/§配置) ==
+PASS  export DEFAULT_CONFIG is object
+PASS  export mergeConfig is function
+PASS  export scanAssistantText is function
+PASS  export scanToolArguments is function
+PASS  export scanToolResult is function
+PASS  export buildCorrectionMessage is function
+PASS  export buildDenyReason is function
+PASS  export sanitizeMessages is function
+PASS  DEFAULT_CONFIG contains every declared config key
+PASS  DEFAULT_CONFIG has no undocumented/unknown config key
+PASS  DEFAULT_CONFIG.closingTagCount == 8
+PASS  DEFAULT_CONFIG.contextGuard == false
+PASS  DEFAULT_CONFIG.contextGuardNote == ""
+PASS  DEFAULT_CONFIG.debugLog == false
+PASS  DEFAULT_CONFIG.debugLogPath == ""
+PASS  DEFAULT_CONFIG.enabled == true
+PASS  DEFAULT_CONFIG.endSequenceRepeats == 2
+PASS  DEFAULT_CONFIG.lang == "zh"
+PASS  DEFAULT_CONFIG.maxChars == 20000
+PASS  DEFAULT_CONFIG.maxCorrectionsPerTurn == 1
+PASS  DEFAULT_CONFIG.maxLines == 100
+PASS  DEFAULT_CONFIG.noopCheck == true
+PASS  R9: DEFAULT_CONFIG.noopCheck defaults to true (M3 kill switch on)
+PASS  R10: default debugLogPath hardcodes no absolute machine path
+PASS  INTERFACE §配置 documents config key "closingTagCount"
+PASS  INTERFACE §配置 documents config key "contextGuard"
+PASS  INTERFACE §配置 documents config key "contextGuardNote"
+PASS  INTERFACE §配置 documents config key "debugLog"
+PASS  INTERFACE §配置 documents config key "debugLogPath"
+PASS  INTERFACE §配置 documents config key "enabled"
+PASS  INTERFACE §配置 documents config key "endSequenceRepeats"
+PASS  INTERFACE §配置 documents config key "lang"
+PASS  INTERFACE §配置 documents config key "maxChars"
+PASS  INTERFACE §配置 documents config key "maxCorrectionsPerTurn"
+PASS  INTERFACE §配置 documents config key "maxLines"
+PASS  INTERFACE §配置 documents config key "noopCheck"
+NOTE  R10 documented :: docs/INTERFACE.md documents all 12 config keys (D-5 resolved by the 2026-10-29 R10 ruling)
+
+== 2. mergeConfig / ruling R3 ==
+PASS  mergeConfig(no args) does not throw
+PASS  mergeConfig(no args) returns full defaults
+PASS  mergeConfig(null) does not throw
+PASS  mergeConfig(null) returns full defaults
+PASS  mergeConfig(array) does not throw
+PASS  mergeConfig(array) returns full defaults
+PASS  mergeConfig(function) does not throw
+PASS  mergeConfig(function) returns full defaults
+PASS  mergeConfig(string) does not throw
+PASS  mergeConfig(string) returns full defaults
+PASS  mergeConfig(number) does not throw
+PASS  mergeConfig(number) returns full defaults
+PASS  mergeConfig(Date) does not throw
+PASS  mergeConfig(Date) returns full defaults
+PASS  mergeConfig(Map) does not throw
+PASS  mergeConfig(Map) returns full defaults
+PASS  mergeConfig(hostile proxy) does not throw
+PASS  mergeConfig(hostile proxy) returns full defaults
+PASS  R3 (2026-10-28 wording fix): a transparent proxy is read as a plain object
+PASS  mergeConfig does not mutate its input
+PASS  mergeConfig applies valid numeric override
+PASS  mergeConfig ignores unknown keys
+PASS  mergeConfig result does not share mutable ref with DEFAULT_CONFIG
+PASS  R9: mergeConfig({noopCheck:false}) -> false
+PASS  R9: mergeConfig({noopCheck:true}) -> true
+PASS  R9: non-boolean noopCheck "no" falls back to true
+PASS  R9: non-boolean noopCheck 0 falls back to true
+PASS  R9: non-boolean noopCheck 1 falls back to true
+PASS  R9: non-boolean noopCheck null falls back to true
+PASS  R9: non-boolean noopCheck undefined falls back to true
+PASS  R9: non-boolean noopCheck {} falls back to true
+PASS  R9: non-boolean noopCheck [] falls back to true
+PASS  R9: noopCheck does not leak into other defaults
+PASS  R10: mergeConfig({debugLog:true}) -> true
+PASS  R10: non-boolean debugLog falls back to false
+PASS  R10: mergeConfig({debugLogPath:"/tmp/x.log"}) -> that path
+PASS  R10: empty/non-string debugLogPath resolves to the DOCUMENTED default "" (temp dir)
+PASS  R12: mergeConfig({contextGuard:true}) -> true
+PASS  R12: non-boolean contextGuard falls back to false
+PASS  R12: non-empty contextGuardNote is honored
+PASS  R12: empty/non-string contextGuardNote falls back to ""
+PASS  R12: contextGuard settings do not leak into other defaults
+PASS  mergeConfig fallback: NaN
+PASS  mergeConfig fallback: Infinity
+PASS  mergeConfig fallback: -1
+PASS  mergeConfig fallback: string number
+PASS  mergeConfig fallback: unknown lang
+PASS  mergeConfig fallback: en lang
+PASS  mergeConfig fallback: non-bool enabled
+PASS  R7: 0 on the four detection thresholds falls back to defaults
+PASS  R7: maxCorrectionsPerTurn:0 is allowed (disables self-heal)
+PASS  R7: non-integer numerics fall back to defaults
+
+== 3. non-string / hostile inputs to scanAssistantText (must not throw) ==
+PASS  scanAssistantText(undefined) does not throw
+PASS  scanAssistantText(undefined) shape
+PASS  scanAssistantText(null) does not throw
+PASS  scanAssistantText(null) shape
+PASS  scanAssistantText(number) does not throw
+PASS  scanAssistantText(number) shape
+PASS  scanAssistantText(true) does not throw
+PASS  scanAssistantText(true) shape
+PASS  scanAssistantText(array) does not throw
+PASS  scanAssistantText(array) shape
+PASS  scanAssistantText(plain obj) does not throw
+PASS  scanAssistantText(plain obj) shape
+PASS  scanAssistantText(Symbol) does not throw
+PASS  scanAssistantText(Symbol) shape
+PASS  scanAssistantText(BigInt) does not throw
+PASS  scanAssistantText(BigInt) shape
+PASS  scanAssistantText(function) does not throw
+PASS  scanAssistantText(function) shape
+PASS  scanAssistantText(Object.create(null)) does not throw
+PASS  scanAssistantText(Object.create(null)) shape
+PASS  scanAssistantText(throwing toString) does not throw
+PASS  scanAssistantText(throwing toString) shape
+PASS  scanAssistantText(throwing toPrimitive) does not throw
+PASS  scanAssistantText(throwing toPrimitive) shape
+PASS  scanAssistantText(Date) does not throw
+PASS  scanAssistantText(Date) shape
+PASS  scanAssistantText(hostile proxy) does not throw
+PASS  scanAssistantText(hostile proxy) shape
+
+== 4. scanAssistantText return shape + ruling R1 (silentFailure) ==
+PASS  scanAssistantText return keys == {damaged,silentFailure,findings,evidence}
+PASS  evidence keys == {length,closingTagCount,endSequenceRepeats,leakedMarkup,truncated}
+PASS  R1: damaged===true for V1
+PASS  R1 meta omitted -> silentFailure=false
+PASS  R1 meta null -> silentFailure=false
+PASS  R1 meta {} -> silentFailure=false
+PASS  R1 meta {hasToolCalls:true} -> silentFailure=false
+PASS  R1 meta {hasToolCalls:false} -> silentFailure=true
+PASS  R1 meta {hasToolCalls:"no"} -> silentFailure=false
+PASS  R1 meta {hasToolCalls:undefined} -> silentFailure=false
+PASS  R1: meta does not change damaged
+PASS  R1: meta does not change findings
+PASS  scanAssistantText with throwing meta getter does not throw
+PASS  throwing meta getter -> silentFailure false
+PASS  R1: undamaged input never sets silentFailure
+
+== 5. fixture replay: positives must hit, negatives must not ==
+PASS  positive v1-end-multiplied: damaged===true
+PASS  positive v1-end-multiplied: contains END_SEQUENCE_MULTIPLIED
+PASS  positive v1-end-multiplied: silentFailure===true (no tool calls)
+PASS  positive v1-end-multiplied: >=1 error finding
+PASS  positive v2-missing-opening: damaged===true
+PASS  positive v2-missing-opening: contains MISSING_OPENING_MARKUP
+PASS  positive v2-missing-opening: silentFailure===true (no tool calls)
+PASS  positive v2-missing-opening: >=1 error finding
+PASS  positive v3-leaked-markup: damaged===true
+PASS  positive v3-leaked-markup: contains MARKUP_LEAKED_AS_TEXT
+PASS  positive v3-leaked-markup: silentFailure===true (no tool calls)
+PASS  positive v3-leaked-markup: >=1 error finding
+PASS  negative ok-normal-html: damaged===false
+PASS  negative ok-normal-html: silentFailure===false
+PASS  negative ok-normal-js: damaged===false
+PASS  negative ok-normal-js: silentFailure===false
+PASS  negative ok-normal-markdown-table: damaged===false
+PASS  negative ok-normal-markdown-table: silentFailure===false
+PASS  negative ok-short-text-few-tags: damaged===false
+PASS  negative ok-short-text-few-tags: silentFailure===false
+PASS  negative ok-single-end-sequence: damaged===false
+PASS  negative ok-single-end-sequence: silentFailure===false
+
+== 6. scanToolArguments: shape, deny gate (lead-reported false positive) ==
+  sizes: damagedBig=1170ch, okBigHtml=5890ch, shortQuotingProtocol=34ch
+  CONTROL scanToolArguments(before section 6) = {"action":"ok","findings":[],"reason":""}
+  CONTROL big(40)+EI..EI = {"action":"deny","findings":[{"code":"CLOSING_TAG_DENSITY","severity":"info","detail":"string leaf content: 42 closing-prefix occurrences (threshold 8)"},{"code":"END_SEQUENCE_MULTIPLIED","severity":"error","detail":"string leaf content: trailing end-sequence run = 2 (threshold 2)"},{"code":"UNPAIRED_CLOSING_TAG","severity":"info","detail":"call end marker count exceeds call opening marker count (2 end vs 0 open)"}],"reason":"参数结构校验失败：参数疑似边界丢失（重复的结束序列），本次未执行。请拆成 ≤100 行的若干块，先写首块再用追加，并避免字面闭合标签。"}
+PASS  scanToolArguments(ok-normal-html as one leaf) does not throw
+PASS  scanToolArguments(ok-normal-html as one leaf) action in {ok,flag,deny}
+PASS  scanToolArguments(ok-normal-html as one leaf) findings is array
+PASS  scanToolArguments(ok-normal-html as one leaf) non-deny reason is empty
+  -> ok-normal-html as one leaf                     action=flag  codes=["CLOSING_TAG_DENSITY"]
+PASS  scanToolArguments(ok-normal-js as one leaf) does not throw
+PASS  scanToolArguments(ok-normal-js as one leaf) action in {ok,flag,deny}
+PASS  scanToolArguments(ok-normal-js as one leaf) findings is array
+PASS  scanToolArguments(ok-normal-js as one leaf) non-deny reason is empty
+  -> ok-normal-js as one leaf                       action=flag  codes=["PAYLOAD_TOO_LONG"]
+PASS  scanToolArguments(ok-normal-markdown-table) does not throw
+PASS  scanToolArguments(ok-normal-markdown-table) action in {ok,flag,deny}
+PASS  scanToolArguments(ok-normal-markdown-table) findings is array
+PASS  scanToolArguments(ok-normal-markdown-table) non-deny reason is empty
+  -> ok-normal-markdown-table                       action=ok    codes=[]
+PASS  scanToolArguments(ok-short-text-few-tags) does not throw
+PASS  scanToolArguments(ok-short-text-few-tags) action in {ok,flag,deny}
+PASS  scanToolArguments(ok-short-text-few-tags) findings is array
+PASS  scanToolArguments(ok-short-text-few-tags) non-deny reason is empty
+  -> ok-short-text-few-tags                         action=ok    codes=[]
+PASS  scanToolArguments(ok-single-end-sequence) does not throw
+PASS  scanToolArguments(ok-single-end-sequence) action in {ok,flag,deny}
+PASS  scanToolArguments(ok-single-end-sequence) findings is array
+PASS  scanToolArguments(ok-single-end-sequence) non-deny reason is empty
+  -> ok-single-end-sequence                         action=ok    codes=[]
+PASS  scanToolArguments(V1 fixture as one leaf) does not throw
+PASS  scanToolArguments(V1 fixture as one leaf) action in {ok,flag,deny}
+PASS  scanToolArguments(V1 fixture as one leaf) findings is array
+PASS  scanToolArguments(V1 fixture as one leaf) deny has non-empty reason
+PASS  scanToolArguments(V1 fixture as one leaf) deny reason <= 400 chars
+PASS  scanToolArguments(V1 fixture as one leaf) deny implies an error finding
+  -> V1 fixture as one leaf                         action=deny  codes=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","UNPAIRED_CLOSING_TAG"]
+PASS  scanToolArguments(legal big HTML (200 lines)) does not throw
+PASS  scanToolArguments(legal big HTML (200 lines)) action in {ok,flag,deny}
+PASS  scanToolArguments(legal big HTML (200 lines)) findings is array
+PASS  scanToolArguments(legal big HTML (200 lines)) non-deny reason is empty
+  -> legal big HTML (200 lines)                     action=flag  codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY"]
+PASS  scanToolArguments(short doc quoting protocol once (<=400ch)) does not throw
+PASS  scanToolArguments(short doc quoting protocol once (<=400ch)) action in {ok,flag,deny}
+PASS  scanToolArguments(short doc quoting protocol once (<=400ch)) findings is array
+PASS  scanToolArguments(short doc quoting protocol once (<=400ch)) non-deny reason is empty
+  -> short doc quoting protocol once (<=400ch)      action=flag  codes=["UNPAIRED_CLOSING_TAG"]
+PASS  scanToolArguments(damagedBig (>=30 lines + trailing run 2)) does not throw
+PASS  scanToolArguments(damagedBig (>=30 lines + trailing run 2)) action in {ok,flag,deny}
+PASS  scanToolArguments(damagedBig (>=30 lines + trailing run 2)) findings is array
+PASS  scanToolArguments(damagedBig (>=30 lines + trailing run 2)) deny has non-empty reason
+PASS  scanToolArguments(damagedBig (>=30 lines + trailing run 2)) deny reason <= 400 chars
+PASS  scanToolArguments(damagedBig (>=30 lines + trailing run 2)) deny implies an error finding
+  -> damagedBig (>=30 lines + trailing run 2)       action=deny  codes=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","UNPAIRED_CLOSING_TAG"]
+PASS  ACCEPTANCE: short (<=400ch) legal doc w/ isolated closer => NOT deny
+PASS  ACCEPTANCE: big damaged payload => deny
+PASS  ACCEPTANCE: 8-line short doc (<=400ch) of isolated closers => NOT deny
+NOTE  dense gate sweep (isolated parameter closers, 1 per line) :: 1lines/12ch->flag  2lines/25ch->flag  4lines/51ch->flag  6lines/77ch->flag  7lines/90ch->flag  8lines/103ch->flag  9lines/116ch->flag  12lines/155ch->flag
+PASS  scanToolArguments(args=undefined) does not throw
+PASS  scanToolArguments(args=undefined) action valid
+PASS  scanToolArguments(args=null) does not throw
+PASS  scanToolArguments(args=null) action valid
+PASS  scanToolArguments(args=number) does not throw
+PASS  scanToolArguments(args=number) action valid
+PASS  scanToolArguments(args=Symbol) does not throw
+PASS  scanToolArguments(args=Symbol) action valid
+PASS  scanToolArguments(args=string leaf at root) does not throw
+PASS  scanToolArguments(args=string leaf at root) action valid
+PASS  scanToolArguments(args=array) does not throw
+PASS  scanToolArguments(args=array) action valid
+PASS  scanToolArguments(args=empty obj) does not throw
+PASS  scanToolArguments(args=empty obj) action valid
+PASS  scanToolArguments(args=Object.create(null)) does not throw
+PASS  scanToolArguments(args=Object.create(null)) action valid
+PASS  scanToolArguments(args=symbol value) does not throw
+PASS  scanToolArguments(args=symbol value) action valid
+PASS  scanToolArguments(args=bigint value) does not throw
+PASS  scanToolArguments(args=bigint value) action valid
+PASS  scanToolArguments(args=function value) does not throw
+PASS  scanToolArguments(args=function value) action valid
+PASS  scanToolArguments(hostile proxy args) does not throw
+PASS  hostile proxy args -> valid action
+PASS  scanToolArguments(throwing getter leaf) does not throw
+PASS  throwing getter leaf -> valid action
+PASS  cyclic args handled in <2000ms
+PASS  cyclic args -> deny (payload still reachable)
+PASS  damaged leaf at depth ~6 is detected (deny)
+PASS  R8: damaged leaf at depth ~31 is NOT scanned (bound = depth 24)
+PASS  R8: damaged leaf beyond 200 leaves is NOT scanned (bound = 200)
+PASS  R8 is recorded in docs/INTERFACE.md
+PASS  R8 boundary is recorded in plugin/README.md
+
+== 7. scanToolArguments: unit rules (PAYLOAD_TOO_LONG / DENSITY / R2 / truncation) ==
+PASS  PAYLOAD_TOO_LONG on >maxChars single line => flag (warn only)
+PASS  lines > maxLines (101) => PAYLOAD_TOO_LONG warn
+PASS  CLOSING_TAG_DENSITY is info, legal HTML must not deny
+PASS  R2: one PARAM end + one INVOKE end at tail => no END_SEQUENCE_MULTIPLIED
+PASS  R6: call-shaped unclosed structure => TRUNCATED_PAYLOAD
+PASS  R6: call-shaped truncated + >=20 lines => deny
+PASS  R6: non-call-shaped doc quoting markup => NO TRUNCATED_PAYLOAD
+PASS  R6: non-call-shaped doc => no error finding / not deny
+PASS  UNPAIRED_CLOSING_TAG detected
+PASS  CRLF: trailing run 2 still detected
+PASS  CRLF: big damaged payload => deny
+
+== 7b. R4 deny gate + the two named false positives (whole docs) ==
+PASS  R4: big leaf with only UNPAIRED (info) => not deny
+PASS  R4: call-shaped truncated 1999 chars/1 line => NOT deny
+PASS  R4: call-shaped truncated 2000 chars/1 line => deny
+PASS  R4: below-gate error finding is retained but downgraded to flag
+PASS  R4: 19-line call-shaped truncated => NOT deny
+PASS  R4: 20-line call-shaped truncated => deny
+PASS  FALSE-POSITIVE GUARD: docs/DESIGN.md (not denied)
+PASS  FALSE-POSITIVE GUARD: docs/DESIGN.md has no error finding
+PASS  FALSE-POSITIVE GUARD: docs/DESIGN.md is above the volume gate (test is meaningful)
+  -> docs/DESIGN.md         action=flag  aboveGate=true codes=["PAYLOAD_TOO_LONG"]
+PASS  FALSE-POSITIVE GUARD: docs/CONTRACTS.md (not denied)
+PASS  FALSE-POSITIVE GUARD: docs/CONTRACTS.md has no error finding
+PASS  FALSE-POSITIVE GUARD: docs/CONTRACTS.md is above the volume gate (test is meaningful)
+  -> docs/CONTRACTS.md      action=flag  aboveGate=true codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","UNPAIRED_CLOSING_TAG","UNPAIRED_CLOSING_TAG"]
+PASS  FALSE-POSITIVE GUARD: plugin/README.md (not denied)
+PASS  FALSE-POSITIVE GUARD: plugin/README.md has no error finding
+PASS  FALSE-POSITIVE GUARD: plugin/README.md is above the volume gate (test is meaningful)
+  -> plugin/README.md       action=flag  aboveGate=true codes=["PAYLOAD_TOO_LONG"]
+PASS  FALSE-POSITIVE GUARD: tests/README.md (not denied)
+PASS  FALSE-POSITIVE GUARD: tests/README.md has no error finding
+PASS  FALSE-POSITIVE GUARD: tests/README.md is above the volume gate (test is meaningful)
+  -> tests/README.md        action=flag  aboveGate=true codes=["PAYLOAD_TOO_LONG"]
+PASS  FALSE-POSITIVE GUARD: docs/INTERFACE.md (not denied)
+PASS  FALSE-POSITIVE GUARD: docs/INTERFACE.md has no error finding
+PASS  FALSE-POSITIVE GUARD: docs/INTERFACE.md is above the volume gate (test is meaningful)
+  -> docs/INTERFACE.md      action=flag  aboveGate=true codes=["PAYLOAD_TOO_LONG"]
+PASS  FALSE-POSITIVE GUARD: docs/PROMPTS.md (not denied)
+PASS  FALSE-POSITIVE GUARD: docs/PROMPTS.md has no error finding
+PASS  FALSE-POSITIVE GUARD: docs/PROMPTS.md is above the volume gate (test is meaningful)
+  -> docs/PROMPTS.md        action=ok    aboveGate=true codes=[]
+
+== 7c. R5 internal-error honesty (code + severity + reason) ==
+PASS  R5: forced internal error reports INTERNAL_ERROR
+PASS  R5: internal error is NOT reported as SUSPICIOUS_NOOP_RESULT
+PASS  R5: internal error severity is info (never damaged)
+PASS  R5: internal error detail starts with "internal-error: "
+PASS  R5 (static): INTERNAL_ERROR_CODE is INTERNAL_ERROR, not SUSPICIOUS_NOOP_RESULT
+PASS  R5: buildDenyReason on an info-only INTERNAL_ERROR returns ""
+
+== 8. scanToolArguments: no payload text in reason/evidence; no mutation ==
+PASS  canary case denies
+PASS  deny.reason contains NO payload text
+PASS  every finding.detail contains NO payload text
+PASS  assistant evidence contains NO payload text
+PASS  assistant findings contain NO payload text
+PASS  evidence values are only number/boolean
+PASS  scanToolArguments does not mutate its args
+PASS  result identical on deep-frozen vs live input (no hidden mutation)
+PASS  scanAssistantText does not mutate its text arg
+
+== 9. scanToolResult: shape, no-op detection, hostile inputs ==
+PASS  scanToolResult(null result) does not throw
+PASS  scanToolResult(null result) shape
+PASS  scanToolResult(string result) does not throw
+PASS  scanToolResult(string result) shape
+PASS  scanToolResult(number result) does not throw
+PASS  scanToolResult(number result) shape
+PASS  scanToolResult(isError result) does not throw
+PASS  scanToolResult(isError result) shape
+PASS  scanToolResult(empty result, empty args) does not throw
+PASS  scanToolResult(empty result, empty args) shape
+PASS  scanToolResult(explicit noop status) does not throw
+PASS  scanToolResult(explicit noop status) shape
+PASS  scanToolResult(bytesWritten 0 w/ payload) does not throw
+PASS  scanToolResult(bytesWritten 0 w/ payload) shape
+PASS  scanToolResult(applied=false w/ payload) does not throw
+PASS  scanToolResult(applied=false w/ payload) shape
+PASS  scanToolResult(nothing-to-do phrase) does not throw
+PASS  scanToolResult(nothing-to-do phrase) shape
+PASS  explicit no-op status => suspicious:true + SUSPICIOUS_NOOP_RESULT
+PASS  suspect result carries reason
+PASS  cyclic result handled in <2000ms, no throw
+PASS  scanToolResult(hostile proxy) does not throw
+PASS  hostile proxy result -> {suspicious:false}
+
+== 9b. R9: noopCheck kill switch, write-tool gate, structured-vs-free-text ==
+PASS  R9: default (noopCheck:true) still detects
+PASS  R9: noopCheck:false disables M3 entirely
+PASS  R9: noopCheck:false returns exactly {suspicious,findings}
+PASS  R9: noopCheck:false does not change scanAssistantText
+PASS  R9: noopCheck:false does not change scanToolArguments
+PASS  R9: write-like tool "write" is judged
+PASS  R9: write-like tool "edit" is judged
+PASS  R9: write-like tool "apply_patch" is judged
+PASS  R9: write-like tool "append" is judged
+PASS  R9: write-like tool "create_file" is judged
+PASS  R9: write-like tool "save" is judged
+PASS  R9: write-like tool "delete" is judged
+PASS  R9: write-like tool "move" is judged
+PASS  R9: write-like tool "copy" is judged
+PASS  R9: write-like tool "truncate" is judged
+PASS  R9: write-like tool "rename" is judged
+PASS  R9: non-write tool "read" is never judged
+PASS  R9: non-write tool "grep" is never judged
+PASS  R9: non-write tool "glob" is never judged
+PASS  R9: non-write tool "bash" is never judged
+PASS  R9: non-write tool "run_code" is never judged
+PASS  R9: non-write tool "web_search" is never judged
+PASS  R9: non-write tool "list_files" is never judged
+PASS  R9: non-write tool "terminal" is never judged
+PASS  R9: non-write tool "ops_bash" is never judged
+PASS  R9: non-write tool "session_search" is never judged
+PASS  R9: non-write tool "rg" is never judged
+PASS  R9: non-write tool "cat" is never judged
+PASS  R9: non-string tool name is never judged
+PASS  R9: write gate applies even when noopCheck is on (read tool + explicit enum)
+PASS  R9 STRUCTURED evidence fires: status:"unchanged"
+PASS  R9 STRUCTURED evidence fires: status:"noop"
+PASS  R9 STRUCTURED evidence fires: status:"no-op"
+PASS  R9 STRUCTURED evidence fires: status:"skipped"
+PASS  R9 STRUCTURED evidence fires: status:"nothing"
+PASS  R9 STRUCTURED evidence fires: noop:true
+PASS  R9 STRUCTURED evidence fires: skipped:true
+PASS  R9 STRUCTURED evidence fires: unchanged:true
+PASS  R9 STRUCTURED evidence fires: no_change:true
+PASS  R9 STRUCTURED evidence fires: applied:false
+PASS  R9 STRUCTURED evidence fires: changed:false
+PASS  R9 STRUCTURED evidence fires: written:0 (with payload)
+PASS  R9 STRUCTURED evidence fires: bytesWritten:0 (with payload)
+PASS  R9 STRUCTURED evidence fires: meta.status:"noop"
+PASS  R9: written:0 WITHOUT carried payload => not suspicious (path-only call)
+PASS  R9 FREE TEXT must NOT fire: content text "unchanged"
+PASS  R9 FREE TEXT must NOT fire: content text "no changes"
+PASS  R9 FREE TEXT must NOT fire: content text "nothing to do"
+PASS  R9 FREE TEXT must NOT fire: content text "no-op"
+PASS  R9 FREE TEXT must NOT fire: content text "did not write"
+PASS  R9 FREE TEXT must NOT fire: content text zh 未做任何改动
+PASS  R9 FREE TEXT must NOT fire: content text zh 没有任何变更
+PASS  R9 FREE TEXT must NOT fire: git-status prose
+PASS  R9 FREE TEXT must NOT fire: status:"no changes" (spaced, not enum)
+PASS  R9 FREE TEXT must NOT fire: status:"NO CHANGES" (case+space)
+PASS  R9 FREE TEXT must NOT fire: note:"unchanged" (wrong key)
+PASS  R9 FREE TEXT must NOT fire: message:"no changes" (wrong key)
+PASS  R9 FREE TEXT must NOT fire: bare string value "unchanged"
+PASS  R9: M3 reason is its own no-op text, never the B "structure damaged" block
+PASS  R9: M3 reason respects lang=en
+PASS  R9: M3 suspicious finding is SUSPICIOUS_NOOP_RESULT/severity warn only
+PASS  scanToolResult(throwing value getter) does not throw
+PASS  R9: unreadable result => suspicious:false, reason empty
+
+== 9c. R12/M5: sanitizeMessages purity + behavior ==
+PASS  sanitizeMessages(default/off) does not throw
+PASS  R12-off: changed === false
+PASS  R12-off: returns the ORIGINAL array reference
+PASS  R12-off: rewrites === []
+PASS  R12-off: input not mutated
+PASS  sanitizeMessages(contextGuard:true) does not throw
+PASS  R12-on: changed === true
+PASS  R12-on: returns a NEW array (not the input reference)
+PASS  R12-on: exactly one rewrite, at the damaged assistant index 2
+PASS  R12-on: rewritten content is exactly one text block
+PASS  R12-on: rewritten message is a NEW object; untouched messages are reused by reference
+PASS  R12-on: rewritten message keeps role=assistant
+PASS  R12-on: rewrites contain no payload text
+PASS  R12-on: rewrites carry FindingCodes
+PASS  R12-on: a tool-call message is never touched
+PASS  R12-on: a non-assistant message is never touched
+PASS  R12-on: input not mutated (original damaged message intact)
+PASS  sanitizeMessages(healthy, on) does not throw
+PASS  R12: nothing damaged -> changed:false + ORIGINAL array reference
+PASS  sanitizeMessages(identified message) does not throw
+PASS  R12: id and source are preserved on the rewritten message
+PASS  R12: contextGuardNote overrides the built-in note verbatim
+PASS  R12: lang switches the built-in note
+PASS  R12: the neutral note contains no payload text
+PASS  sanitizeMessages(undefined, on) does not throw
+PASS  R12 hostile(undefined): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(null, on) does not throw
+PASS  R12 hostile(null): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(string, on) does not throw
+PASS  R12 hostile(string): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(number, on) does not throw
+PASS  R12 hostile(number): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(plain object, on) does not throw
+PASS  R12 hostile(plain object): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(function, on) does not throw
+PASS  R12 hostile(function): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(empty array, on) does not throw
+PASS  R12 hostile(empty array): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(array of junk, on) does not throw
+PASS  R12 hostile(array of junk): shape {changed,messages,rewrites}
+PASS  sanitizeMessages(cyclic array) does not throw
+PASS  R12 cyclic array: no throw, damaged still rewritten at index 0
+PASS  sanitizeMessages(hostile proxy) does not throw
+PASS  R12 hostile proxy: no throw, changed:false, original reference returned
+PASS  sanitizeMessages(throwing content getter) does not throw
+PASS  R12 throwing content getter: no throw
+PASS  sanitizeMessages(deep-frozen input, on) does not throw
+PASS  R12 deep-frozen input: no throw and still rewrites
+
+== 10. buildCorrectionMessage / buildDenyReason ==
+PASS  buildCorrectionMessage non-empty for warn
+PASS  buildCorrectionMessage default lang zh
+PASS  buildCorrectionMessage respects lang + {MAX}
+PASS  buildCorrectionMessage empty when only info
+PASS  buildCorrectionMessage empty for [] / null
+PASS  buildCorrectionMessage never throws on garbage
+PASS  buildDenyReason non-empty, states NOT executed, <=400
+PASS  buildDenyReason empty for no blocking findings
+PASS  buildDenyReason truncates to <=400 for huge findings
+PASS  buildDenyReason respects lang
+
+== 11. idempotence, purity (no console), unknown FindingCode guard ==
+PASS  idempotent: same input -> identical output (5 cases)
+PASS  detect functions write nothing to console (no logging)
+PASS  R5: SUSPICIOUS_NOOP_RESULT never leaks into scanAssistantText
+PASS  R5: SUSPICIOUS_NOOP_RESULT never leaks into scanToolArguments
+PASS  R5: scanToolResult is the only producer of SUSPICIOUS_NOOP_RESULT
+PASS  R5: INTERNAL_ERROR is allowed to degrade inside scanToolResult
+PASS  no FindingCode outside the frozen set was ever produced
+NOTE  FindingCode coverage :: produced=CLOSING_TAG_DENSITY,END_SEQUENCE_MULTIPLIED,INTERNAL_ERROR,MARKUP_LEAKED_AS_TEXT,MISSING_OPENING_MARKUP,PAYLOAD_TOO_LONG,SUSPICIOUS_NOOP_RESULT,TRUNCATED_PAYLOAD,UNPAIRED_CLOSING_TAG  not-produced=(none)
+
+== 12. large-input performance (adversarial) ==
+PASS  5MB plain text: no throw, <5000ms
+PASS  5MB plain text: length reported
+PASS  5MB of closing tags: no throw, <5000ms
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=14.1
+PASS  ~2.6MB call markup via args: no throw, <5000ms
+  call-markup args: action=deny ms=21.1 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+PASS  pathological < / > flood: no throw, <5000ms
+PASS  pathological flood via args: no throw, <5000ms
+
+== SUMMARY ==
+PASS=436  FAIL=0  NOTES=3  DEFECTS=0
+
+--- raw snapshot ---
+frozenCodesProduced=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","INTERNAL_ERROR","MARKUP_LEAKED_AS_TEXT","MISSING_OPENING_MARKUP","PAYLOAD_TOO_LONG","SUSPICIOUS_NOOP_RESULT","TRUNCATED_PAYLOAD","UNPAIRED_CLOSING_TAG"]

@@ -1,0 +1,13 @@
+# Local diagnostics — never publish.
+# The R10 debug log records session ids, internal agent field names and the
+# plugin's own injected text; it is a debugging aid, not part of the plugin.
+scratch/
+
+# Standard noise
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Author-side one-shot probes
+tests/.probe.mjs

@@ -1,0 +1,14 @@
+detect.js sha256=b6d71061409c301f5197d03d978dcb213e630235ede19e42dc66faeedb9fc774
+
+D-1a FALSE NEGATIVE: <invoke><parameter>...</parameter> but NO </invoke>
+  chars=1212 lines=44
+  => action=deny  findings=["CLOSING_TAG_DENSITY:info","TRUNCATED_PAYLOAD:error"]
+  => reason="参数结构校验失败：参数疑似边界丢失（调用结构中途截断），本次未执行。请拆成 ≤100 行的若干块，先写首块再用追加，并避免字面闭合标签。"
+
+D-1b FALSE POSITIVE: HTML prose quoting markup, opener tail (starts with <div)
+  chars=1191 lines=42
+  => action=flag  findings=["CLOSING_TAG_DENSITY:info"]
+
+D-1c LIVE: plugin/README.md is denied (guard refuses to write its own README)
+  chars=6845 lines=101
+  => action=flag  findings=["PAYLOAD_TOO_LONG:warn"]

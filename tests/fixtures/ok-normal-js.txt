@@ -1,0 +1,123 @@
+export function range(start, end, step = 1) {
+  const out = [];
+  if (step === 0) throw new RangeError('step must not be zero');
+  if (start < end) {
+    for (let i = start; i < end; i += step) out.push(i);
+  } else {
+    for (let i = start; i > end; i += step) out.push(i);
+  }
+  return out;
+}
+
+export function clamp(value, min, max) {
+  if (min > max) return clamp(value, max, min);
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+export function chunk(items, size) {
+  if (size <= 0) throw new RangeError('size must be positive');
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+export function summarize(rows) {
+  const totals = new Map();
+  for (const row of rows) {
+    const key = String(row.group ?? 'ungrouped');
+    const prev = totals.get(key) ?? { count: 0, sum: 0 };
+    prev.count += 1;
+    prev.sum += Number(row.amount) || 0;
+    totals.set(key, prev);
+  }
+  return [...totals.entries()]
+    .map(([group, agg]) => ({
+      group,
+      count: agg.count,
+      total: Number(agg.sum.toFixed(2)),
+      mean: agg.count === 0 ? 0 : Number((agg.sum / agg.count).toFixed(2)),
+    }))
+    .sort((a, b) => (a.group < b.group ? -1 : a.group > b.group ? 1 : 0));
+}
+export function templateReport(title, rows) {
+  const lines = summarize(rows).map((item) => `- ${item.group}: ${item.total} (${item.count} rows)`);
+  return [`# ${title}`, '', ...lines, ''].join('\n');
+}
+
+export function debounce(fn, waitMs) {
+  let timer = null;
+  return function debounced(...args) {
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      fn.apply(this, args);
+    }, waitMs);
+  };
+}
+
+export function pick(source, keys) {
+  const out = {};
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) out[key] = source[key];
+  }
+  return out;
+}
+
+export function stableHash(input) {
+  const text = typeof input === 'string' ? input : JSON.stringify(input);
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+export function groupBy(items, keyFn) {
+  const out = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!out.has(key)) out.set(key, []);
+    out.get(key).push(item);
+  }
+  return out;
+}
+
+export function formatBytes(bytes, digits = 1) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** index;
+  return `${value.toFixed(index === 0 ? 0 : digits)} ${units[index]}`;
+}
+
+export function retry(task, attempts = 3, delayMs = 100) {
+  return new Promise((resolve, reject) => {
+    const attempt = (left) => {
+      task().then(resolve).catch((error) => {
+        if (left <= 1) reject(error);
+        else setTimeout(() => attempt(left - 1), delayMs * (attempts - left + 1));
+      });
+    };
+    attempt(attempts);
+  });
+}
+
+export function mergeDeep(target, source) {
+  const out = { ...target };
+  for (const [key, value] of Object.entries(source ?? {})) {
+    const current = out[key];
+    if (value && typeof value === 'object' && !Array.isArray(value)
+      && current && typeof current === 'object' && !Array.isArray(current)) {
+      out[key] = mergeDeep(current, value);
+    } else {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+

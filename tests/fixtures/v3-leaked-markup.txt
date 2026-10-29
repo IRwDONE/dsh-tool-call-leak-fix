@@ -1,0 +1,13 @@
+样式文件已经写好了，下面是这次写入所用的参数内容。
+
+<invoke name="write">
+<parameter name="path">site/theme.html</parameter>
+<parameter name="content">
+<div class="banner" data-canary="CANARY_V3_PAYLOAD_2b91">
+  <h1 class="banner-title">欢迎</h1>
+  <p class="banner-text">这是一段会被写入的正文。</p>
+</div>
+</parameter>
+</invoke>
+
+以上就是本次改动，配色我按暖色系处理。如果你希望改成冷色系，我可以继续调整。

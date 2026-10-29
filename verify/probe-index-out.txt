@@ -1,0 +1,118 @@
+
+== 0. provenance ==
+index.js  sha256=3de47da7d68190d66ed8d35d9142c21b112e21383e9ea7ebe8d40d8f67bdc6b7 bytes=20260
+detect.js sha256=4ea090ce921e181caca9f90e85f2da414812691b2e770bd0cd7c860bb2df5efb bytes=37848
+
+== 1. module shape (apply / inject) ==
+PASS  index.js default-loads and exports apply()
+PASS  index.js exports inject as an array of service names
+PASS  M1-removed: inject === ["tools"] (never systemPrompt)
+
+== 1b. Config export: hand-written Standard Schema v1 (R9) ==
+PASS  index.js exports Config
+PASS  Config is callable schemastery-style: Config(raw) -> merged config
+PASS  Config["~standard"] exists with version 1 + validate()
+PASS  Config.validate returns {value} and never {issues} (cannot deactivate the plugin)
+PASS  Config.validate clamps exactly like mergeConfig (R7)
+PASS  Config.validate drops unknown keys
+PASS  Config.validate(null) -> full defaults (incl. noopCheck:true)
+PASS  Config.validate is idempotent on its own output
+PASS  Config.validate({debugLog:true}) -> true
+PASS  Config.validate defaults debugLog to false
+PASS  Config.validate keeps a supplied debugLogPath
+PASS  Config.validate covers all 12 documented config keys
+PASS  R10: Config.validate defaults debugLogPath to "" (matches the contract)
+PASS  R12: Config.validate defaults contextGuard to false
+PASS  R12: Config.validate keeps contextGuardNote
+
+== 2. apply(): Config read + effect-based registration (M1 removed) ==
+PASS  enabled:false registers nothing
+PASS  one listener per ctx.effect registration (count derived, never hardcoded)
+PASS  every effect returned a disposer function
+PASS  M1-removed: apply() never registers a systemPrompt.section
+PASS  core listener registered: tools/pre-execute
+PASS  core listener registered: tools/post-execute
+PASS  core listener registered: session/event
+PASS  core listener registered: agent/turn-stopping
+PASS  no listener outside the allowed event set
+PASS  registered set == CORE + whichever OPTIONAL seams are wired
+NOTE  registered seams :: ["agent/turn-stopping","session/event","tools/post-execute","tools/pre-execute"] (OPTIONAL ["llm/stream"] wired=0)
+PASS  unload: invoking every disposer does not throw
+PASS  apply() degrades on a ctx without tools / with a throwing on()
+PASS  M1-removed: apply() completes when systemPrompt is a throwing getter
+PASS  M1-removed (static): no systemPrompt reference in index.js code
+PASS  M1-removed (static): no PREVENTION_TEXT / preventionText left
+PASS  M1-removed (static): the A-block prompt text is not hardcoded in index.js
+PASS  R10: apply() with debugLog:true completes and still registers the full event set
+
+== 3. M2 tools/pre-execute: deny damaged, next() otherwise ==
+PASS  M2: damaged args => {kind:"deny"} with a reason
+PASS  M2: takeover path does NOT call next()
+PASS  M2: healthy args => calls next() and returns its value
+PASS  M2: malformed exec => still calls next()
+
+== 4. M2 V4 guard: only for tools declaring non-empty required params ==
+PASS  V4: empty args + declared required => deny
+PASS  V4: denial names the missing required keys
+PASS  V4: genuine no-argument tool (no required) => NOT denied
+PASS  V4: required:[] => NOT denied (next called)
+PASS  V4: unknown tool schema => NOT denied (conservative)
+PASS  V4: non-empty args => NOT denied
+PASS  V4: throwing registry => listener does not throw, calls next()
+
+== 5. M3 tools/post-execute: always next(), enrich on suspicion ==
+PASS  M3: calls next() exactly once
+PASS  M3: suspicious no-op => decision gains additionalContexts
+PASS  M3: additionalContexts entry is a user message with the correction text
+PASS  M3: additionalContexts source.kind is an admitted v4 producer kind
+PASS  M3: clean result => decision unchanged (still next()ed once)
+PASS  M3: unknown downstream decision kind => left untouched
+
+== 5b. R9: M3 kill switch, write-tool gate, own reason text ==
+PASS  R9/M3: default config => M3 still enriches
+PASS  R9/M3: noopCheck:false => M3 never enriches
+PASS  R9/M3: non-write tool => M3 never enriches
+PASS  R9/M3: free-text result => M3 never enriches
+PASS  R9/M3: injected text is the no-op reason, NOT the B "structure damaged" block
+PASS  R9/M3: injected text carries no payload
+PASS  R9/M3: text respects lang=en
+
+== 6. M4 seam: session/event -> agent/turn-stopping -> agent.inject ==
+PASS  M4: damaged assistant text (no tool-call) => one inject()
+  injected message = {"id":"840f59cf-0986-4455-9e56-fa1a5de0047d","role":"user","content":[{"type":"text","text":"【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，直接用更小的分块重新发起那个调用。\n\n[结构校验失败 · 自动纠正]\n\n上一步的 assistant 输出被判为工具调用结构损坏（检测到未配对的调用标记、重复的结束序列，\n或调用标记泄漏为正文）。该步未执行任何操作——不要假设它已成功，也不要引用它的结果。\n\n现在请重新执行同一步骤，并遵守：\n1. 把 payload 拆到每块 ≤ 100 行：首块用 write，其余用追加。\n2. 参数里不要出现完整的字面闭合标签，用拼接构造。\n3. 每块落盘后用一次独立的小调用回读校验。\n4. 不要复述、不要重新输出上一段损坏内容——直接给出新的、更小的调用。"}],"source":{"kind":"runtime-context"}}
+PASS  M4: injected message is a user message with a text block
+PASS  M4: injected text is the correction prompt, not the payload
+PASS  M4: injected message source.kind is an admitted v4 producer kind
+PASS  M4: injected message carries a string id
+PASS  M4: per-turn cap honored (2nd stop injects nothing)
+PASS  M4: healthy assistant text => no inject
+PASS  M4: damaged text WITH tool calls => no inject (R1 hasToolCalls)
+PASS  M4: first stop injects
+PASS  M4: cap resets for a new turn
+PASS  M4: maxCorrectionsPerTurn:0 disables self-heal
+PASS  M4: turn-stopping listener never throws
+PASS  M4: malformed turn-stopping payloads never throw
+PASS  M4: malformed session events never throw
+
+== 6b. M5/R12 wiring status + (if wired) llm/stream behaviour ==
+NOTE  M5 wiring status :: llm/stream is NOT registered (M5 withdrawn by user decision; D-8 capability gap, implementation kept in src/detect.js)
+PASS  M5-withdrawn: apply() registers no llm/stream listener
+PASS  M5-withdrawn: index.js code has no sanitizeMessages call site (no dead path)
+PASS  M5-withdrawn: the D-8 rationale + re-wiring guidance are kept in a comment
+PASS  M5-withdrawn: sanitizeMessages is still exported and callable (code kept)
+PASS  M5-withdrawn: the kept function still rewrites a damaged assistant message
+PASS  M5-withdrawn: the public patch does not expose contextGuard
+PASS  M5-withdrawn: INTERFACE does not claim an implemented llm/stream listener
+
+== 7. no payload text hardcoded / leaked into messages ==
+PASS  M1-removed: no prompt section is registered, so no prompt text can leak
+PASS  M1-removed: no registered prompt text contains the canary
+PASS  M4 injected correction contains no payload canary
+PASS  index.js source does not hardcode any fixture canary
+
+== 8. index.js module hygiene ==
+PASS  index.js source is non-empty and exports apply
+PASS  index.js has no top-level await import side effects (loads cleanly)
+
+== SUMMARY ==
+PASS=86  FAIL=0  NOTES=2  DEFECTS=0

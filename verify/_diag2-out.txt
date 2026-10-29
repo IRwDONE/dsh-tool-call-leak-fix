@@ -1,0 +1,24 @@
+
+docs/plugin-README.md  [6637 chars]
+  worktree(fe132d8e): action=ok  []
+  HEAD(fe549ba)    : action=ok  []
+
+docs/CONTRACTS.md  [35571 chars]
+  worktree(fe132d8e): action=flag  ["PAYLOAD_TOO_LONG:warn","CLOSING_TAG_DENSITY:info","UNPAIRED_CLOSING_TAG:info","UNPAIRED_CLOSING_TAG:info"]
+  HEAD(fe549ba)    : action=flag  ["PAYLOAD_TOO_LONG:warn","CLOSING_TAG_DENSITY:info","UNPAIRED_CLOSING_TAG:info","UNPAIRED_CLOSING_TAG:info"]
+
+docs/INTERFACE.md  [7379 chars]
+  worktree(fe132d8e): action=flag  ["PAYLOAD_TOO_LONG:warn"]
+  HEAD(fe549ba)    : action=flag  ["PAYLOAD_TOO_LONG:warn"]
+
+docs/DESIGN.md  [6186 chars]
+  worktree(fe132d8e): action=flag  ["PAYLOAD_TOO_LONG:warn"]
+  HEAD(fe549ba)    : action=flag  ["PAYLOAD_TOO_LONG:warn"]
+
+callShaped: invoke+param payload /param NO /invoke (47 lines)  [1212 chars]
+  worktree(fe132d8e): action=flag  ["CLOSING_TAG_DENSITY:info"]
+  HEAD(fe549ba)    : action=deny  ["CLOSING_TAG_DENSITY:info","TRUNCATED_PAYLOAD:error"]
+
+nonCallShaped: html + quoted markup, opener tail  [1191 chars]
+  worktree(fe132d8e): action=deny  ["CLOSING_TAG_DENSITY:info","TRUNCATED_PAYLOAD:error"]
+  HEAD(fe549ba)    : action=flag  ["CLOSING_TAG_DENSITY:info"]

@@ -1,0 +1,5 @@
+<invoke name="write">
+<parameter name="path">assets/app.js</parameter>
+<parameter name="content">export const sum = (a, b) => a + b;
+</parameter>
+</invoke>

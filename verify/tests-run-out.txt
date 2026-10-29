@@ -1,0 +1,217 @@
+PASS  impl.exports.complete
+
+== A. fixtures 完整性（防分块写入被静默截断） ==
+PASS  A1 8 个 fixture 文件齐全
+PASS  A2 无残留 @@ 占位符
+PASS  A3 fixture 非空且以换行结束
+PASS  A4 反例逐 tag 配平（无过度闭合）
+PASS  A5 普通反例不含调用标记
+
+== B. 正例：scanAssistantText 检出 3/3 变体（DESIGN §6 检测召回） ==
+PASS  B1[V1] 结束序列增殖 判 damaged:true
+PASS  B1b[V1] 命中 END_SEQUENCE_MULTIPLIED
+PASS  B1c[V1] findings 形状合法
+PASS  B1d[V1] 至少一个 error 级 finding
+PASS  B1e[V1] evidence 形状合法
+PASS  B1f[V1] 结果不含 payload 正文（canary 检查）
+PASS  B1[V2] 开场序列缺失 判 damaged:true
+PASS  B1b[V2] 命中 MISSING_OPENING_MARKUP
+PASS  B1c[V2] findings 形状合法
+PASS  B1d[V2] 至少一个 error 级 finding
+PASS  B1e[V2] evidence 形状合法
+PASS  B1[V3] 正文泄漏 判 damaged:true
+PASS  B1b[V3] 命中 MARKUP_LEAKED_AS_TEXT
+PASS  B1c[V3] findings 形状合法
+PASS  B1d[V3] 至少一个 error 级 finding
+PASS  B1e[V3] evidence 形状合法
+PASS  B1f[V3] 结果不含 payload 正文（canary 检查）
+PASS  B2 V1 evidence.endSequenceRepeats >= 2（R2 尾部门限）
+PASS  B3 V3 evidence.leakedMarkup === true
+
+== C. 反例：零误报（DESIGN §6「对正常代码/HTML/长文本 0 误报」） ==
+PASS  C1[ok-normal-html.txt] damaged:false
+PASS  C1b[ok-normal-html.txt] 无 error/warn finding
+PASS  C1c[ok-normal-html.txt] evidence 形状合法
+PASS  C1d[ok-normal-html.txt] evidence.truncated:false
+PASS  C1[ok-normal-js.txt] damaged:false
+PASS  C1b[ok-normal-js.txt] 无 error/warn finding
+PASS  C1c[ok-normal-js.txt] evidence 形状合法
+PASS  C1d[ok-normal-js.txt] evidence.truncated:false
+PASS  C1[ok-normal-markdown-table.txt] damaged:false
+PASS  C1b[ok-normal-markdown-table.txt] 无 error/warn finding
+PASS  C1c[ok-normal-markdown-table.txt] evidence 形状合法
+PASS  C1d[ok-normal-markdown-table.txt] evidence.truncated:false
+PASS  C1[ok-short-text-few-tags.txt] damaged:false
+PASS  C1b[ok-short-text-few-tags.txt] 无 error/warn finding
+PASS  C1c[ok-short-text-few-tags.txt] evidence 形状合法
+PASS  C1d[ok-short-text-few-tags.txt] evidence.truncated:false
+PASS  C1[ok-single-end-sequence.txt] damaged:false
+PASS  C1b[ok-single-end-sequence.txt] 无 error/warn finding
+PASS  C1c[ok-single-end-sequence.txt] evidence 形状合法
+PASS  C1d[ok-single-end-sequence.txt] evidence.truncated:false
+PASS  C2 合法收尾（1 个 PARAM_END + 1 个 INVOKE_END）不判 END_SEQUENCE_MULTIPLIED
+PASS  C3 合成截断样例判 TRUNCATED_PAYLOAD（DESIGN §1.3 证据 B 的尾部丢失形态）
+
+== D. 静默失败标志 silentFailure（裁定 R1：唯一名字 + 精确公式） ==
+PASS  D1[V1] silentFailure === (damaged && meta.hasToolCalls===false) @ meta 缺省
+PASS  D1[V1] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls=false
+PASS  D1[V1] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls=true
+PASS  D1[V1] silentFailure === (damaged && meta.hasToolCalls===false) @ meta={} 无 hasToolCalls
+PASS  D1[V1] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls 非布尔
+PASS  D2[V1] meta 不影响 damaged / findings
+PASS  D3[V1] 无同义自愈字段（R1）
+PASS  D1[V2] silentFailure === (damaged && meta.hasToolCalls===false) @ meta 缺省
+PASS  D1[V2] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls=false
+PASS  D1[V2] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls=true
+PASS  D1[V2] silentFailure === (damaged && meta.hasToolCalls===false) @ meta={} 无 hasToolCalls
+PASS  D1[V2] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls 非布尔
+PASS  D2[V2] meta 不影响 damaged / findings
+PASS  D3[V2] 无同义自愈字段（R1）
+PASS  D1[V3] silentFailure === (damaged && meta.hasToolCalls===false) @ meta 缺省
+PASS  D1[V3] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls=false
+PASS  D1[V3] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls=true
+PASS  D1[V3] silentFailure === (damaged && meta.hasToolCalls===false) @ meta={} 无 hasToolCalls
+PASS  D1[V3] silentFailure === (damaged && meta.hasToolCalls===false) @ hasToolCalls 非布尔
+PASS  D2[V3] meta 不影响 damaged / findings
+PASS  D3[V3] 无同义自愈字段（R1）
+PASS  D4[ok-normal-html.txt] 未损坏时 silentFailure:false（即使 hasToolCalls:false）
+PASS  D4[ok-normal-js.txt] 未损坏时 silentFailure:false（即使 hasToolCalls:false）
+PASS  D4[ok-normal-markdown-table.txt] 未损坏时 silentFailure:false（即使 hasToolCalls:false）
+PASS  D4[ok-short-text-few-tags.txt] 未损坏时 silentFailure:false（即使 hasToolCalls:false）
+PASS  D4[ok-single-end-sequence.txt] 未损坏时 silentFailure:false（即使 hasToolCalls:false）
+
+== E. scanToolArguments：已解析参数的边界扫描（V1 现场） ==
+PASS  E1 合法参数 → action:ok 且无 finding
+PASS  E2 超长叶子（150 行）→ PAYLOAD_TOO_LONG(warn) → action:flag
+PASS  E3 超长单行（> maxChars）→ PAYLOAD_TOO_LONG
+PASS  E4 嵌套 object/array 字符串叶子被递归遍历
+PASS  E5 大 payload + 尾部连续 INVOKE_END×3 → END_SEQUENCE_MULTIPLIED + action:deny
+PASS  E6 大 payload 以未闭合 PARAM_OPEN 结束 → TRUNCATED_PAYLOAD + action:deny
+PASS  E7 配平但闭合标签密集 → CLOSING_TAG_DENSITY(info) → action:flag
+PASS  E8 opts 抬高上限后不再 PAYLOAD_TOO_LONG → action:ok
+PASS  E9 不修改入参 args（深遍历只读）
+PASS  E10 args 为 null / 非字符串叶子 → 不抛异常且无 finding
+PASS  E11 返回值形状合法（action 取值 / findings 形状 / deny 必带 reason）
+
+== E2. deny 门槛（R4）：短文档永不 deny、大 payload 才拦、参数叶子 UNPAIRED 恒为 info ==
+PASS  E12[N1] docs/DESIGN.md 全文作叶子 → 不得 deny（守卫不得拒绝写解释自己的文档）
+PASS  E12[N1b] 小 payload（约 200–400 字）含 1 个孤立 INVOKE_END → 不得 deny
+PASS  E12[N2] 大 payload（≥2000 字符）+ 尾部连续 INVOKE_END → 必须 deny
+PASS  E13 参数叶子上的 UNPAIRED_CLOSING_TAG 恒为 info，且永不导致 deny（R4）
+
+== F. scanToolResult：形状与「判不准就不报」 ==
+PASS  F1 result 为 undefined → suspicious:false，形状合法
+PASS  F2 args/result 为 null → 不抛异常，形状合法
+PASS  F3 证据不足时不报 suspicious（不猜）
+
+== G. buildCorrectionMessage：无 error/warn 时返回空串 ==
+PASS  G1 findings 为空 → ""
+PASS  G2 只有 info 级 finding → ""
+PASS  G3 损坏 findings → 非空且含「未执行」否定语义
+PASS  G4 lang:en → 非空英文文案：含英文「未执行」语义且不含 CJK
+PASS  G5 findings 为 null → ""，不抛异常
+PASS  G6 不含 payload 正文（canary 检查）
+
+== H. buildDenyReason：长度 ≤ 400 且含「未执行 + 原因 + 怎么改」 ==
+PASS  H1[V1] 长度 ≤ 400 + 含「未执行」
+PASS  H1[V2] 长度 ≤ 400 + 含「未执行」
+PASS  H1[V3] 长度 ≤ 400 + 含「未执行」
+PASS  H2 200 条 findings 仍 ≤ 400 字符（截断保护）
+PASS  H3 lang:en → 非空英文、≤ 400、含英文「未执行」语义、不含 CJK
+PASS  H4 findings 为 null → 返回字符串且 ≤ 400，不抛异常
+PASS  H5 不含 payload 正文（canary 检查）
+
+== I. mergeConfig：默认值 / 非法值回退 / 引用隔离 ==
+PASS  I1 DEFAULT_CONFIG 与冻结默认值逐字段一致
+PASS  I2 mergeConfig() → 完整默认值
+PASS  I2 mergeConfig(undefined) → 完整默认值
+PASS  I2 mergeConfig({}) → 完整默认值
+PASS  I2 mergeConfig(null) → 完整默认值
+PASS  I2 mergeConfig([]) → 完整默认值
+PASS  I2 mergeConfig(function) → 完整默认值
+PASS  I2 mergeConfig(proxy) → 完整默认值
+PASS  I3 未知键被忽略
+PASS  I4 合法覆盖被采纳
+PASS  I5 非法数值（负数 / NaN / ±Infinity / 字符串）一律回退默认
+PASS  I6 未知 lang 回退 zh，合法 lang 保留
+PASS  I7 返回值是新对象，不与 DEFAULT_CONFIG 共享可变引用
+PASS  I8 不修改 partial 入参
+PASS  I9[R7] maxLines/maxChars/closingTagCount/endSequenceRepeats 取 0 一律回退默认
+PASS  I10[R7] 非整数（10.5）一律回退默认
+PASS  I11[R7 例外] maxCorrectionsPerTurn 允许 0（= 关闭自动纠偏）
+PASS  I12[R7 端到端] {endSequenceRepeats:0} 回退默认后不得判 END_SEQUENCE_MULTIPLIED
+PASS  I13[R3 修正] 透明 Proxy 按普通对象处理（键被采纳）
+PASS  I14[R3 修正] Date / Map / 敌意 Proxy → 不抛异常且回退完整默认值
+PASS  I15[R9] noopCheck 默认 true；false 被采纳；非布尔一律回退默认 true
+
+== J. 幂等 / 纯函数（DESIGN §6 幂等·安全） ==
+PASS  J1[V1] 同输入两次 scanAssistantText 结果一致
+PASS  J1[V2] 同输入两次 scanAssistantText 结果一致
+PASS  J1[V3] 同输入两次 scanAssistantText 结果一致
+PASS  J2[ok-normal-html.txt] 同输入两次 scanAssistantText 结果一致
+PASS  J2[ok-normal-js.txt] 同输入两次 scanAssistantText 结果一致
+PASS  J2[ok-normal-markdown-table.txt] 同输入两次 scanAssistantText 结果一致
+PASS  J2[ok-short-text-few-tags.txt] 同输入两次 scanAssistantText 结果一致
+PASS  J2[ok-single-end-sequence.txt] 同输入两次 scanAssistantText 结果一致
+PASS  J3 scanToolArguments 幂等
+PASS  J4 mergeConfig 幂等
+PASS  J5 buildDenyReason / buildCorrectionMessage 幂等
+PASS  J6 DEFAULT_CONFIG 未被任何调用污染
+
+== K. 健壮性：非法入参不抛异常（稳定性要求） ==
+PASS  K1 scanAssistantText 非字符串入参不抛异常且形状合法
+PASS  K2 scanToolArguments 异常入参不抛异常
+PASS  K3 scanToolResult / 文案构造函数异常入参不抛异常
+PASS  K4 opts 非法（null / 非对象）不抛异常
+
+== L. 内建自检：INTERNAL_ERROR 降级路径 + SUSPICIOUS_NOOP_RESULT 只在 §3 ==
+PASS  L0 FindingCode 集合与 INTERFACE.md 冻结集合一致（9 个，R5 增补 INTERNAL_ERROR）
+PASS  L1 畸形/敌意输入：三函数不抛异常、恒不 deny、info-only 组合不产生 deny、非 deny 时 reason 为空
+PASS  L2 scanToolResult 内部异常 → 不 suspicious、不抛异常、findings 形状合法
+PASS  L3 scanAssistantText 非法/敌对入参 → 不抛异常，INTERNAL_ERROR（若有）恒 info 且不判 damaged
+PASS  L4 SUSPICIOUS_NOOP_RESULT 不得出现在 scanToolArguments / scanAssistantText 的结果里（R5）
+
+== M. 静态与文档断言（D-0 / R8）+ R6 修正（PARAM_OPEN 起点、TRUNCATED 非死代码） ==
+PASS  M1[D-0] 剥离注释后，plugin/index.js 的代码里不得出现 kind:"plugin" 旧形状
+PASS  M2[D-0] source.kind 必须是 runtime-context 或 plugin:<pkg>，且 <pkg> 与 package.json name 一致
+PASS  M3[R8] plugin/README.md 必须写明叶子遍历边界（≤200 个叶子 / 深度 24）
+PASS  M4[R6a] PARAM_OPEN 起头、停在开场标记内 → TRUNCATED_PAYLOAD=true / deny=true
+PASS  M4[R6b] INVOKE_OPEN 起头、信封永不闭合、尾部以 PARAM_END 收尾【漏报方向】 → TRUNCATED_PAYLOAD=true / deny=true
+PASS  M4[R6c] 普通 HTML 起头、尾部才出现未闭合开场标记【误报方向】 → TRUNCATED_PAYLOAD=false / deny=false
+PASS  M4[R6d] 前导空白（换行）后以 INVOKE_OPEN 起头、信封不闭合【非空白门槛】 → TRUNCATED_PAYLOAD=true / deny=true
+PASS  M4[R6-meta] 用例集必须能区分判据方向：R6b/R6c 在两种判据下结论必须不同
+PASS  M5[R6] 整轮测试中 TRUNCATED_PAYLOAD 至少被产生过一次（防死代码）
+
+== N. M3 空转检测（R9）：自由文本不误报 + 真空转仍抓 + kill switch ==
+PASS  N1[R9 误报回归] git status 式输出（nothing to commit） → 不得 suspicious
+PASS  N1[R9 误报回归] 说明性文本含 unchanged → 不得 suspicious
+PASS  N1[R9 误报回归] 说明性文本含 no changes → 不得 suspicious
+PASS  N1[R9 误报回归] 说明性文本含「未做任何」 → 不得 suspicious
+PASS  N1[R9 误报回归] status 里是自由文本 "no changes"（非枚举值） → 不得 suspicious
+PASS  N1[R9 误报回归] 大小写/换行混排的说明文本 → 不得 suspicious
+PASS  N2[R9 核心] git status 式结果即使 args 带长 payload 也不得 suspicious
+PASS  N3[R9 真空转] {written:0} + args 带 payload → 仍必须 suspicious
+PASS  N4[R9 真空转·方向对照] 布尔显式空转标志 unchanged:true → 仍必须 suspicious
+PASS  N5[R9 kill switch] noopCheck:false → 真空转也不得 suspicious（且默认开时仍抓）
+PASS  N6[R9] 非写类工具 / isError / 空 result → 不判 suspicious（宁漏勿扰）
+PASS  N7[R9 方向对照] 同一措辞：机器可读的空转枚举要抓、自由文本不抓
+PASS  N8[R9 文案隔离] suspicious 的 reason 必须是 M3 语义，不得复用 B 段（结构损坏/未执行）
+
+== O. M5 上下文净化 sanitizeMessages（R12）：窄作用域改写 / 原引用 / 开关 / 纯函数 ==
+PASS  O0 前置：两个损坏样本确实被判 damaged 且命中预期 code；健康样本不 damaged
+PASS  O1[R12 改写] assistant + 无 tool-call + V2 损坏 → changed:true，content 变单个 text 块且不含 payload
+PASS  O2[R12 改写] V3 正文泄漏形态同样被改写，codes 含 MARKUP_LEAKED_AS_TEXT
+PASS  O3[R12 保护真实调用] 同形态损坏但含 tool-call 块 → changed:false 且原引用
+PASS  O4[R12 不动健康] 正常 assistant 文本 → changed:false 且原引用
+PASS  O5[R12 不动其它角色] user / tool / system 永不改写
+PASS  O6[R12 默认关闭] contextGuard 缺省 / false / 非布尔 → 永不改写且原引用
+PASS  O7[R12 配置] contextGuard 布尔/非布尔回退；contextGuardNote 字符串/非字符串回退
+PASS  O8[R12 自定义注记] contextGuardNote 非空时改写文本用该注记
+PASS  O9[R12 内置注记] 缺省注记按 lang 出中文/英文，且不含 payload
+PASS  O10[R12 索引与引用] 多消息混合：rewrites.index 精确、未改动消息复用引用、tool-call 消息不动
+PASS  O11[R12 纯函数] 幂等：同输入两次结果一致
+PASS  O12[R12 纯函数] 非数组 / 畸形元素 / 循环引用 / Proxy → changed:false、不抛异常
+PASS  O13[R12 形状] 返回值形状恒定：changed:boolean + messages + rewrites 数组
+
+== 汇总 ==
+PASS 182 / FAIL 0

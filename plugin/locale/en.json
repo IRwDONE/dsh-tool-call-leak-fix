@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Structured Output Guard",
+    "description": "Detects lost tool-call argument boundaries (multiplied end sequences, missing opening markup, markup leaked as prose), denies damaged calls, and self-heals once within the same turn."
+  }
+}

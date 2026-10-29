@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Balanced HTML sample</title>
+  <link rel="stylesheet" href="./assets/site.css">
+  <script src="./assets/site.js" defer></script>
+</head>
+<body>
+  <div class="page">
+    <header class="page-head">
+      <h1 class="page-title">Balanced HTML sample</h1>
+      <nav class="page-nav">
+        <ul class="nav">
+          <li class="nav-item"><a href="#one">One</a></li>
+          <li class="nav-item"><a href="#two">Two</a></li>
+          <li class="nav-item"><a href="#three">Three</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main class="page-main">
+      <section id="one" class="panel">
+        <h2 class="panel-title">Section one</h2>
+        <p class="panel-text">A normal paragraph with <strong>emphasis</strong> and <code>inline code</code>.</p>
+      </section>
+      <section id="two" class="panel">
+        <h2 class="panel-title">Section two</h2>
+        <table class="data">
+          <thead>
+            <tr><th scope="col">Name</th><th scope="col">Value</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>alpha</td><td>1</td></tr>
+            <tr><td>beta</td><td>2</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section id="three" class="panel">
+        <h2 class="panel-title">Section three</h2>
+        <figure class="figure">
+          <img src="./assets/pic.png" alt="placeholder image" width="320" height="180">
+          <figcaption class="caption">A caption for the figure.</figcaption>
+        </figure>
+      </section>
+    </main>
+    <footer class="page-foot">
+      <p class="foot-note">Footer note, ending the document.</p>
+    </footer>
+  </div>
+</body>
+</html>
