@@ -4,14 +4,14 @@ session log files = 75
 
 === independently computed ===
 {
-  "assistantMessageEvents": 3536,
-  "assistantMessagesWithText": 2535,
-  "assistantMessagesTextOnlyNoToolCalls": 186,
-  "assistantMessagesWithTextAndToolCalls": 2349,
-  "damagedCurrent": 25,
+  "assistantMessageEvents": 3578,
+  "assistantMessagesWithText": 2569,
+  "assistantMessagesTextOnlyNoToolCalls": 190,
+  "assistantMessagesWithTextAndToolCalls": 2379,
+  "damagedCurrent": 27,
   "damagedCurrentWithToolCalls": 5,
-  "damagedCurrentNoToolCalls": 20,
-  "damagedPreD10": 24,
+  "damagedCurrentNoToolCalls": 22,
+  "damagedPreD10": 26,
   "damagedOnlyViaD10": 1,
   "parseErrorsSkipped": 0,
   "frameErrorsSkipped": 0

@@ -1,13 +1,13 @@
 ### GIT HEAD
-6b0bf01 docs(D-9): R12 rewiring rules are future-tense, not current behaviour; drop the self-contradiction
+ee911b0 test(D-10): namespace-dialect assertions (positive + guards + zero-drift) -> 187 PASS
 
 ### HASHES BEFORE
-3de47da7d68190d66ed8d35d9142c21b112e21383e9ea7ebe8d40d8f67bdc6b7 *plugin/index.js
-4ea090ce921e181caca9f90e85f2da414812691b2e770bd0cd7c860bb2df5efb *plugin/src/detect.js
-4510ae71ecc39802a3696349e0a5f4a216dcfefa7f79aaedc2a0104452871321 *plugin/package.json
-11fd098c1919cce2a7986cb56912309b23ff879cc59f404f3671bf7def9c93dd *plugin/cordis.patch.yml
-8c101540f13ce606688ccebe5ed988a6aa4ea5103ec32dc5c037af759df959a9 *tests/run.mjs
-e91269d3f498c4205bd36e045c53f096153f294ee9f6c5c5347ca08985762fdf *docs/INTERFACE.md
+9d038734b249ef3b68ab771a65aa5497fba60cc7a8735f81b4b304f02f164292 *plugin/index.js
+16227b7baf2b4686ddaae5aba7aa50aff29ca808501c550971f389b1174a67fd *plugin/src/detect.js
+c26fac16c3150054d564d5bc4b292cc64660e635222eadb015a98af9228d1275 *plugin/package.json
+3ec76bfad9228d9ddab94cfa02e2fe56f5373b8bc50a85e4f1b0ec4464e38951 *plugin/cordis.patch.yml
+c51ff70dc579105d65ce77eea84bcccdca2c48bf77c8fc83a6a846e2166e0248 *tests/run.mjs
+08a80ce9c4b9b9d2243730c0a24c1aff87fcdfd2286956287659df495de94810 *docs/INTERFACE.md
 
 ### node --check (all JS)
 SYNTAX OK  plugin/index.js
@@ -29,40 +29,34 @@ PATCH: uses - insert:
 
 ### plugin/ file inventory (deliverables)
 plugin:
-total 61
-drwxr-xr-x 1 <user> 197609     0 Oct 29 22:47 .
-drwxr-xr-x 1 <user> 197609     0 Oct 28 23:34 ..
--rw-r--r-- 1 <user> 197609 21164 Oct 29 22:47 README.md
--rw-r--r-- 1 <user> 197609  1010 Oct 29 22:40 cordis.patch.yml
--rw-r--r-- 1 <user> 197609   729 Oct 28 02:39 icon.svg
--rw-r--r-- 1 <user> 197609 20437 Oct 29 22:40 index.js
-drwxr-xr-x 1 <user> 197609     0 Oct 28 02:39 locale
--rw-r--r-- 1 <user> 197609   567 Oct 28 02:39 package.json
-drwxr-xr-x 1 <user> 197609     0 Oct 29 19:25 src
+total 60
+-rw-r--r-- 1 197609 22250 Oct 30 16:34 README.md
+-rw-r--r-- 1 197609  1220 Oct 30 17:33 cordis.patch.yml
+-rw-r--r-- 1 197609   741 Oct 30 01:04 icon.svg
+-rw-r--r-- 1 197609 21547 Oct 30 16:02 index.js
+drwxr-xr-x 1 197609     0 Oct 30 01:04 locale
+-rw-r--r-- 1 197609  1077 Oct 30 02:36 package.json
+drwxr-xr-x 1 197609     0 Oct 30 23:12 src
 
 plugin/locale:
-total 6
-drwxr-xr-x 1 <user> 197609   0 Oct 28 02:39 .
-drwxr-xr-x 1 <user> 197609   0 Oct 29 22:47 ..
--rw-r--r-- 1 <user> 197609 264 Oct 28 02:39 en.json
--rw-r--r-- 1 <user> 197609 263 Oct 28 02:39 zh.json
+total 2
+-rw-r--r-- 1 197609 270 Oct 30 01:04 en.json
+-rw-r--r-- 1 197609 269 Oct 30 01:04 zh.json
 
 plugin/src:
-total 44
-drwxr-xr-x 1 <user> 197609     0 Oct 29 19:25 .
-drwxr-xr-x 1 <user> 197609     0 Oct 29 22:47 ..
--rw-r--r-- 1 <user> 197609 38668 Oct 29 19:25 detect.js
+total 40
+-rw-r--r-- 1 197609 40179 Oct 30 23:12 detect.js
 
 ### tests/run.mjs (author's harness, run by verifier)
 tests/run.mjs EXIT=0
-PASS  O9[R12 内置注记] 缺省注记按 lang 出中文/英文，且不含 payload
-PASS  O10[R12 索引与引用] 多消息混合：rewrites.index 精确、未改动消息复用引用、tool-call 消息不动
-PASS  O11[R12 纯函数] 幂等：同输入两次结果一致
-PASS  O12[R12 纯函数] 非数组 / 畸形元素 / 循环引用 / Proxy → changed:false、不抛异常
-PASS  O13[R12 形状] 返回值形状恒定：changed:boolean + messages + rewrites 数组
+PASS  P1[D-10] 带命名空间前缀的泄漏标记 → damaged
+PASS  P2[D-10] 同一文本 + hasToolCalls:false → silentFailure（M4 的唯一触发条件）
+PASS  P3[D-10] 带前缀的尾部连续结束序列 → END_SEQUENCE_MULTIPLIED 且按 R4 门槛 deny
+PASS  P4[D-10 护栏] 含冒号 / 带前缀但非调用标记的文本不得被误判
+PASS  P5[D-10 零漂移] 不含冒号的文本行为不变（规范化必须早退）
 
 == 汇总 ==
-PASS 182 / FAIL 0
+PASS 187 / FAIL 0
 
 ### verify/probe.mjs (independent detector probe)
 probe EXIT=0
@@ -71,14 +65,14 @@ probe EXIT=0
 PASS  5MB plain text: no throw, <5000ms
 PASS  5MB plain text: length reported
 PASS  5MB of closing tags: no throw, <5000ms
-  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=16.8
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=21.8
 PASS  ~2.6MB call markup via args: no throw, <5000ms
-  call-markup args: action=deny ms=23.7 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+  call-markup args: action=deny ms=27.9 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
 PASS  pathological < / > flood: no throw, <5000ms
 PASS  pathological flood via args: no throw, <5000ms
 
 == SUMMARY ==
-PASS=436  FAIL=0  NOTES=3  DEFECTS=0
+PASS=480  FAIL=0  NOTES=4  DEFECTS=0
 
 --- raw snapshot ---
 frozenCodesProduced=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","INTERNAL_ERROR","MARKUP_LEAKED_AS_TEXT","MISSING_OPENING_MARKUP","PAYLOAD_TOO_LONG","SUSPICIOUS_NOOP_RESULT","TRUNCATED_PAYLOAD","UNPAIRED_CLOSING_TAG"]
@@ -96,12 +90,12 @@ PASS  index.js source is non-empty and exports apply
 PASS  index.js has no top-level await import side effects (loads cleanly)
 
 == SUMMARY ==
-PASS=86  FAIL=0  NOTES=2  DEFECTS=0
+PASS=102  FAIL=0  NOTES=2  DEFECTS=0
 
 ### HASHES AFTER (must equal BEFORE; a difference means the artifact moved during the run)
-3de47da7d68190d66ed8d35d9142c21b112e21383e9ea7ebe8d40d8f67bdc6b7 *plugin/index.js
-4ea090ce921e181caca9f90e85f2da414812691b2e770bd0cd7c860bb2df5efb *plugin/src/detect.js
-4510ae71ecc39802a3696349e0a5f4a216dcfefa7f79aaedc2a0104452871321 *plugin/package.json
-11fd098c1919cce2a7986cb56912309b23ff879cc59f404f3671bf7def9c93dd *plugin/cordis.patch.yml
-8c101540f13ce606688ccebe5ed988a6aa4ea5103ec32dc5c037af759df959a9 *tests/run.mjs
-e91269d3f498c4205bd36e045c53f096153f294ee9f6c5c5347ca08985762fdf *docs/INTERFACE.md
+9d038734b249ef3b68ab771a65aa5497fba60cc7a8735f81b4b304f02f164292 *plugin/index.js
+16227b7baf2b4686ddaae5aba7aa50aff29ca808501c550971f389b1174a67fd *plugin/src/detect.js
+c26fac16c3150054d564d5bc4b292cc64660e635222eadb015a98af9228d1275 *plugin/package.json
+3ec76bfad9228d9ddab94cfa02e2fe56f5373b8bc50a85e4f1b0ec4464e38951 *plugin/cordis.patch.yml
+c51ff70dc579105d65ce77eea84bcccdca2c48bf77c8fc83a6a846e2166e0248 *tests/run.mjs
+08a80ce9c4b9b9d2243730c0a24c1aff87fcdfd2286956287659df495de94810 *docs/INTERFACE.md

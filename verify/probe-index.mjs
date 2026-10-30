@@ -456,6 +456,70 @@ function m4Ctx(config) {
   check('M4: malformed session events never throw', bad === 0, 'throws=' + bad);
 }
 
+section('6a. R11/R13: bounded two-tier M4 escalation');
+{
+  const damagedMsg = { role: 'assistant', content: [{ type: 'text', text: v1Text }] };
+
+  let patch = '';
+  try { patch = readFileSync(path.join(ROOT, 'plugin', 'cordis.patch.yml'), 'utf8'); } catch { /* optional */ }
+  check('R13: the shipped patch sets maxCorrectionsPerTurn: 2 (tier 2 enabled)',
+    /maxCorrectionsPerTurn:\s*2\b/.test(patch),
+    JSON.stringify((patch.match(/maxCorrectionsPerTurn[^\n]*/g) || [])));
+
+  const m = m4Ctx({ maxCorrectionsPerTurn: 2 });
+  m.onAssistant('r13', 1, damagedMsg);
+  const t1 = m.stop('r13', 1);
+  check('R11/R13: tier-1 injects once', t1.length === 1, 'n=' + t1.length);
+  const t1text = t1.length === 1 ? t1[0].content[0].text : '';
+  check('R11: tier-1 text starts with the hard directive',
+    t1text.startsWith('【立即执行】'), JSON.stringify(t1text.slice(0, 40)));
+  check('R11: tier-1 text still carries the B block', t1text.includes('结构校验失败'));
+
+  {
+    const detMod = await import(pathToFileURL(DETECT_PATH).href);
+    const scan = detMod.scanAssistantText(v1Text, undefined, { hasToolCalls: false });
+    const b = detMod.buildCorrectionMessage(scan.findings, {});
+    check('R11: injected tier-1 text CONTAINS buildCorrectionMessage() but is not equal to it',
+      b.length > 0 && t1text.includes(b) && t1text !== b, 'bLen=' + b.length + ' injLen=' + t1text.length);
+  }
+
+  m.onAssistant('r13', 1, damagedMsg);
+  const t2 = m.stop('r13', 1);
+  check('R13: tier-2 injects on the second correction in the same turn', t2.length === 1, 'n=' + t2.length);
+  const t2text = t2.length === 1 ? t2[0].content[0].text : '';
+  check('R13: tier-2 drops the long B block', !t2text.includes('结构校验失败'), JSON.stringify(t2text.slice(0, 60)));
+  check('R13: tier-2 carries the hard short instruction',
+    t2text.includes('第二次尝试仍失败') && t2text.includes('只发一个调用') && t2text.includes('40 行'));
+  check('R13: tier-2 names the finding codes', /（判定：/.test(t2text), JSON.stringify(t2text));
+  check('R13: tier-2 is shorter than tier-1', t2text.length < t1text.length,
+    't1=' + t1text.length + ' t2=' + t2text.length);
+  check('R13: tier-2 message is still a user/runtime-context message',
+    t2.length === 1 && t2[0].role === 'user' && t2[0].source && t2[0].source.kind === 'runtime-context');
+
+  m.onAssistant('r13', 1, damagedMsg);
+  check('R13: bound enforced — third stop injects nothing at max=2', m.stop('r13', 1).length === 0);
+
+  const d = m4Ctx({});
+  d.onAssistant('r13d', 1, damagedMsg);
+  const d1 = d.stop('r13d', 1);
+  check('R13: DEFAULT maxCorrectionsPerTurn=1 still injects tier 1',
+    d1.length === 1 && d1[0].content[0].text.includes('结构校验失败'));
+  d.onAssistant('r13d', 1, damagedMsg);
+  check('R13: DEFAULT max=1 yields no second injection', d.stop('r13d', 1).length === 0);
+
+  const n = m4Ctx({ maxCorrectionsPerTurn: 2 });
+  n.onAssistant('r13n', 1, damagedMsg);
+  const n1 = n.stop('r13n', 1);
+  n.onAssistant('r13n', 1, damagedMsg);
+  n.stop('r13n', 1); // burn tier 2 within turn 1
+  n.onAssistant('r13n', 2, damagedMsg);
+  const n2 = n.stop('r13n', 2);
+  check('R13: a new turn resets to tier 1 (long B block again)',
+    n2.length === 1 && n2[0].content[0].text.includes('结构校验失败'),
+    JSON.stringify(n2.length === 1 ? n2[0].content[0].text.slice(0, 40) : n2));
+  check('R13: tier-1 fired in both turns', n1.length === 1 && n2.length === 1);
+}
+
 section('6b. M5/R12 wiring status + (if wired) llm/stream behaviour');
 {
   const statusCtx = mockCtx();

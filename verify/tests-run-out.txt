@@ -213,5 +213,12 @@ PASS  O11[R12 纯函数] 幂等：同输入两次结果一致
 PASS  O12[R12 纯函数] 非数组 / 畸形元素 / 循环引用 / Proxy → changed:false、不抛异常
 PASS  O13[R12 形状] 返回值形状恒定：changed:boolean + messages + rewrites 数组
 
+== P. D-10 命名空间方言（R14）：带前缀的调用标记必须被认出来 ==
+PASS  P1[D-10] 带命名空间前缀的泄漏标记 → damaged
+PASS  P2[D-10] 同一文本 + hasToolCalls:false → silentFailure（M4 的唯一触发条件）
+PASS  P3[D-10] 带前缀的尾部连续结束序列 → END_SEQUENCE_MULTIPLIED 且按 R4 门槛 deny
+PASS  P4[D-10 护栏] 含冒号 / 带前缀但非调用标记的文本不得被误判
+PASS  P5[D-10 零漂移] 不含冒号的文本行为不变（规范化必须早退）
+
 == 汇总 ==
-PASS 182 / FAIL 0
+PASS 187 / FAIL 0

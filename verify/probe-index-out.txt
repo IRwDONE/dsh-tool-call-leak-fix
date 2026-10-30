@@ -1,7 +1,7 @@
 
 == 0. provenance ==
-index.js  sha256=3de47da7d68190d66ed8d35d9142c21b112e21383e9ea7ebe8d40d8f67bdc6b7 bytes=20260
-detect.js sha256=4ea090ce921e181caca9f90e85f2da414812691b2e770bd0cd7c860bb2df5efb bytes=37848
+index.js  sha256=9d038734b249ef3b68ab771a65aa5497fba60cc7a8735f81b4b304f02f164292 bytes=21178
+detect.js sha256=16227b7baf2b4686ddaae5aba7aa50aff29ca808501c550971f389b1174a67fd bytes=39355
 
 == 1. module shape (apply / inject) ==
 PASS  index.js default-loads and exports apply()
@@ -79,7 +79,7 @@ PASS  R9/M3: text respects lang=en
 
 == 6. M4 seam: session/event -> agent/turn-stopping -> agent.inject ==
 PASS  M4: damaged assistant text (no tool-call) => one inject()
-  injected message = {"id":"840f59cf-0986-4455-9e56-fa1a5de0047d","role":"user","content":[{"type":"text","text":"【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，直接用更小的分块重新发起那个调用。\n\n[结构校验失败 · 自动纠正]\n\n上一步的 assistant 输出被判为工具调用结构损坏（检测到未配对的调用标记、重复的结束序列，\n或调用标记泄漏为正文）。该步未执行任何操作——不要假设它已成功，也不要引用它的结果。\n\n现在请重新执行同一步骤，并遵守：\n1. 把 payload 拆到每块 ≤ 100 行：首块用 write，其余用追加。\n2. 参数里不要出现完整的字面闭合标签，用拼接构造。\n3. 每块落盘后用一次独立的小调用回读校验。\n4. 不要复述、不要重新输出上一段损坏内容——直接给出新的、更小的调用。"}],"source":{"kind":"runtime-context"}}
+  injected message = {"id":"2b7504d1-289c-4201-9ec2-5b6a75a15dc9","role":"user","content":[{"type":"text","text":"【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，直接用更小的分块重新发起那个调用。\n\n[结构校验失败 · 自动纠正]\n\n上一步的 assistant 输出被判为工具调用结构损坏（检测到未配对的调用标记、重复的结束序列，\n或调用标记泄漏为正文）。该步未执行任何操作——不要假设它已成功，也不要引用它的结果。\n\n现在请重新执行同一步骤，并遵守：\n1. 把 payload 拆到每块 ≤ 100 行：首块用 write，其余用追加。\n2. 参数里不要出现完整的字面闭合标签，用拼接构造。\n3. 每块落盘后用一次独立的小调用回读校验。\n4. 不要复述、不要重新输出上一段损坏内容——直接给出新的、更小的调用。"}],"source":{"kind":"runtime-context"}}
 PASS  M4: injected message is a user message with a text block
 PASS  M4: injected text is the correction prompt, not the payload
 PASS  M4: injected message source.kind is an admitted v4 producer kind
@@ -93,6 +93,24 @@ PASS  M4: maxCorrectionsPerTurn:0 disables self-heal
 PASS  M4: turn-stopping listener never throws
 PASS  M4: malformed turn-stopping payloads never throw
 PASS  M4: malformed session events never throw
+
+== 6a. R11/R13: bounded two-tier M4 escalation ==
+PASS  R13: the shipped patch sets maxCorrectionsPerTurn: 2 (tier 2 enabled)
+PASS  R11/R13: tier-1 injects once
+PASS  R11: tier-1 text starts with the hard directive
+PASS  R11: tier-1 text still carries the B block
+PASS  R11: injected tier-1 text CONTAINS buildCorrectionMessage() but is not equal to it
+PASS  R13: tier-2 injects on the second correction in the same turn
+PASS  R13: tier-2 drops the long B block
+PASS  R13: tier-2 carries the hard short instruction
+PASS  R13: tier-2 names the finding codes
+PASS  R13: tier-2 is shorter than tier-1
+PASS  R13: tier-2 message is still a user/runtime-context message
+PASS  R13: bound enforced — third stop injects nothing at max=2
+PASS  R13: DEFAULT maxCorrectionsPerTurn=1 still injects tier 1
+PASS  R13: DEFAULT max=1 yields no second injection
+PASS  R13: a new turn resets to tier 1 (long B block again)
+PASS  R13: tier-1 fired in both turns
 
 == 6b. M5/R12 wiring status + (if wired) llm/stream behaviour ==
 NOTE  M5 wiring status :: llm/stream is NOT registered (M5 withdrawn by user decision; D-8 capability gap, implementation kept in src/detect.js)
@@ -115,4 +133,4 @@ PASS  index.js source is non-empty and exports apply
 PASS  index.js has no top-level await import side effects (loads cleanly)
 
 == SUMMARY ==
-PASS=86  FAIL=0  NOTES=2  DEFECTS=0
+PASS=102  FAIL=0  NOTES=2  DEFECTS=0

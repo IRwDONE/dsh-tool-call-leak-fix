@@ -32,7 +32,9 @@ grep -nE "^\s*-\s*id:" plugin/cordis.patch.yml
 
 echo
 echo "### plugin/ file inventory (deliverables)"
-ls -la plugin plugin/src plugin/locale
+# `-g` suppresses the owner column: this repo is public, so the OS account name
+# must never leak into the captured output.
+ls -lg plugin plugin/src plugin/locale
 
 echo
 echo "### tests/run.mjs (author's harness, run by verifier)"
