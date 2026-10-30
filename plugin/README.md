@@ -71,7 +71,7 @@ Host 插件。针对**工具调用参数边界丢失**（模型侧结构化输�
 - **启用**：用 `plugin_manager` 的 `install_bundle`，`target` 指向**本目录的绝对路径**（`...\DSH调用标签错误修复插件\plugin`），其余交给安装器，不要手改 profile。`cordis.patch.yml` 用的是 `- insert:` 列表 —— 裸 `- id:` 对新 id 是**静默空操作**。
 - **临时关闭**：把 patch 行 `config.enabled` 设为 `false`（不注册任何东西）；或 `plugin_manager` `set_plugin` 把该行 `disabled: true`。
 - **不要插件、只要提示词**：A 段仍保存在 `docs/PROMPTS.md`，可手动追加到 `AGENTS.md`（本插件**不再**内嵌或注入任何提示词 —— 见「变更说明」）。
-- **验证挂载没挂上**：只看工具/事件是否真的生效，不要只看 YAML 合法。`install_bundle` 的 `application` 字段才是判据。
+- **判活要用对地方**：`install_bundle` 的 `application` 字段是首要判据，其次看它是否**真的注入了纠正**。⚠️ **不要去 grep profile 的 `cordis.patch.yml`** —— 本 bundle **自带 patch**（`plugin/cordis.patch.yml`，由 `package.json` 的 `dsh.bundle.patch` 声明），那一行**本来就不在 profile patch 里**；实测有真实会话因此误判"插件没被激活"，把排查带偏。
 - **M5 默认关闭**：只有把 patch 里的 `contextGuard` 设为 `true` 并重新激活，才会改写模型可见历史（见「已知边界」）。M6 未实现。
 
 ## 已知边界（做不到什么）

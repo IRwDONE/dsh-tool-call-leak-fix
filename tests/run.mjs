@@ -1738,6 +1738,42 @@ async function main() {
     eq(r.evidence.length, plain.length, 'evidence.length 应与原文一致');
   });
 
+  /* ------------------------------------------------------------------ */
+  /* Q. D-11 / R15 — fabricated tool-result markup in assistant prose    */
+  /* Real case: a step made no tool call, yet its text was a tool_result */
+  /* block wrapping a version string — a fabricated fact.               */
+  /* ------------------------------------------------------------------ */
+  section('Q. D-11 伪造工具结果（R15）：结果形状的标记出现在正文里');
+
+  check('Q1[D-11] 该步无工具调用 + 正文含结果形状标记 → damaged 且 silentFailure', () => {
+    const LQ = '<';
+    const fabricated = LQ + 'tool_result>v24.12.0 dirs ok' + LQ + '/tool_result>';
+    const r = scanAssistantText(fabricated, {}, { hasToolCalls: false, toolCallCount: 0 });
+    eq(r.damaged, true, 'damaged');
+    eq(r.silentFailure, true, 'silentFailure');
+    ok(hasCode(r, 'MARKUP_LEAKED_AS_TEXT'), '应命中 MARKUP_LEAKED_AS_TEXT');
+  });
+
+  check('Q2[D-11 边界] 同文本但该步确有工具调用 → damaged 仍真，silentFailure 为假（R1 挡住注入）', () => {
+    const LQ = '<';
+    const quoted = '工具返回：' + LQ + 'tool-result>ok' + LQ + '/tool-result>';
+    const r = scanAssistantText(quoted, {}, { hasToolCalls: true, toolCallCount: 1 });
+    eq(r.damaged, true, 'damaged');
+    eq(r.silentFailure, false, 'silentFailure（有工具调用时不得注入）');
+  });
+
+  check('Q3[D-11 护栏] 只提到字段名（无尖括号标签）不得误报', () => {
+    const mentions = [
+      '我们在文档里提到 tool_result 这个字段名。',
+      '响应里的 tool-result 字段是个字符串。',
+      'toolresult 只是命名约定，不是标记。',
+    ];
+    for (const m of mentions) {
+      const r = scanAssistantText(m, {}, { hasToolCalls: false });
+      eq(r.damaged, false, '不得判 damaged：' + JSON.stringify(m));
+    }
+  });
+
   return 0;
 }
 

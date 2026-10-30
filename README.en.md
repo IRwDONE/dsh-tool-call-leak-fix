@@ -20,6 +20,8 @@ When a model writes a very large tool-call argument — especially when the payl
 
 The leaked markup also comes in **more than one dialect**: bare tags (`<invoke` / `<parameter`) *and* **namespace-prefixed** ones (e.g. `<antml:invoke>` / `<antml:parameter>`). The prefixed form once made the detector miss a real failure **entirely** — `<antml:parameter` contains no `<parameter` substring. That is defect **D-10**, now fixed (see §7.4).
 
+A worse variant is the **fabricated tool result**: the text contains a tool-result-shaped block while that step made **no tool call at all** — the model reports a result it never obtained (down to a specific version number). That is a **false fact**, worse than a silent no-op. Defect **D-11**, now fixed (see §7.4).
+
 All three fail **silently**: nothing executes, nothing errors, and the turn closes as though the work had been done.
 
 A related fourth shape (**V4**) comes from the harness's tolerant JSON parser: malformed arguments degrade to `{}`, so the tool runs with empty arguments.
@@ -93,8 +95,16 @@ A git spec looks for the package at the **repository root**, and this repo keeps
 ```
 1. install_bundle returns application: "applied"  -> live.
    If it reports that a restart is required, restart the Harness.
-2. Confirm the row is mounted: it shows up in the Plugin Manager, or use the
-   Harness's Config inspection.
+2. Confirm the row is mounted — check the right place:
+   - OK: the Plugin Manager list, or the Harness's Config inspection (it shows
+     `include:structured-output-guard`).
+   - OK: the strongest signal is that it actually injects a correction.
+   - NOT OK: do **not** grep the profile's
+     `~/.dsh/profiles/<profile>/cordis.patch.yml`. A bundle ships **its own**
+     patch (this package's `plugin/cordis.patch.yml`, declared by
+     `dsh.bundle.patch`), so that row is **not** in the profile patch by design.
+     A real session concluded "the plugin is not activated" from exactly that
+     grep and sent the whole investigation off course.
 3. Disable at any time: disable the bundle in the Plugin Manager, or set the row
    config's `enabled` to false (that registers nothing at all).
 ```
@@ -154,7 +164,7 @@ Verification is split deliberately: "the code does what the contract says" is pr
 
 ### 7.3 Docs and evidence
 
-- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R14), including the ones changed after evidence contradicted them.
+- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R15), including the ones changed after evidence contradicted them.
 - `docs/CONTRACTS.md` — the pre-implementation contract dig; every claim carries a file path and line number.
 - `docs/DESIGN.md` — failure taxonomy, trigger conditions, mechanism design, and the corrections made after measurement.
 - `docs/PROMPTS.md` — the prevention/correction/denial texts, kept even though the plugin no longer injects any prompt (available for manual use).
@@ -170,6 +180,7 @@ Listed because they are the useful part: two of them were only findable by readi
 | `D-1` | medium-high | The truncation predicate was inverted: it missed real truncation **and** blocked legitimate documents — including the plugin's own README. Fixed, with direction-sensitive test cases added |
 | `D-8` | high (accepted) | `M5` cannot rewrite a frozen request ⇒ a **capability gap**, not a bug. Wiring removed, implementation kept |
 | `D-10` | high | The detector only knew **bare** tags, so it could not see the **namespace-prefixed** form that a real failure used (`<antml:invoke>` / `<antml:parameter>`) ⇒ `damaged=false` ⇒ M4 never fired and the turn closed silently. Fixed (R14: structural analysis runs on a namespace-stripped shadow copy; text without a colon is returned as the identical string, so nothing drifts). **Corpus-level check (an invariant, not a snapshot)**: running every real session's text through the pre- and post-fix detector changes the verdict for exactly **1** message — the very fork the user hit. Absolute totals keep growing because the log is append-only (verification itself writes into it), so they are not a baseline |
+| `D-11` | high | **Fabricated tool result**: a step with `toolCallCount === 0` whose text was a `tool_result`-shaped block around a version string (observed in a real session) — the model reported a result it **never obtained**, i.e. a **false fact**. Fixed (R15: result-shaped markup in assistant prose reports `MARKUP_LEAKED_AS_TEXT`; the existing code is reused, `meta` is not consulted, and no natural-language sentence is required; when the step *did* make tool calls, `silentFailure` stays false so R1 blocks the injection) |
 | `D-5 / D-6 / D-7 / D-9` | low | Contract drift, a hardcoded local path in a default, a diagnostic switch left on in the shipped patch, and a self-contradictory doc paragraph. All fixed |
 
 ## 8. Limitations

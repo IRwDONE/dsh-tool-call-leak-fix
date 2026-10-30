@@ -53,6 +53,16 @@ const HEAD_PARAM_RE = new RegExp('^' + LT + 'parameter(?![A-Za-z0-9:_-])');
  */
 const NAMESPACE_PREFIX_RE = /<(\/?)([A-Za-z_][A-Za-z0-9_.-]*):(?!\/)/g;
 
+/**
+ * D-11 (2026-10-30): a tool-result-shaped block in the assistant's *text*.
+ * Observed in a real session: that step made **no** tool call, yet the message
+ * read as a `tool_result` block wrapping `v24.12.0 dirs ok` — the model reported
+ * a result it never obtained. That is worse than a silent no-op: it asserts a
+ * fabricated fact. `[-_]?` allows `tool_result` / `tool-result` / `toolresult`;
+ * namespace prefixes are already stripped by `normalizeNamespaces`.
+ */
+const RESULT_OPEN_RE = new RegExp(LT + 'tool[-_]?result(?![A-Za-z0-9:_-])');
+
 function normalizeNamespaces(text) {
   if (typeof text !== 'string' || text.indexOf(':') === -1) return text;
   try {
@@ -658,6 +668,22 @@ export function scanAssistantText(text, opts, meta) {
           at: hasInvokeOpen ? invokeOpenAt : paramOpenAt,
         });
       }
+    }
+
+    // D-11: tool-result-shaped markup in assistant prose. Deliberately NOT gated
+    // on `meta.hasToolCalls` (R1: meta only decides `silentFailure`) and
+    // deliberately not requiring a natural-language sentence — the observed
+    // payload was 43 characters of pure markup plus a fabricated version string.
+    // Containment comes from R1: when the step *did* make tool calls,
+    // `silentFailure` stays false and M4 never injects.
+    const resultMarkupAt = firstIndexOf(structural, RESULT_OPEN_RE);
+    if (resultMarkupAt !== -1) {
+      findings.push({
+        code: 'MARKUP_LEAKED_AS_TEXT',
+        severity: 'error',
+        detail: 'tool-result-shaped markup in assistant prose (no result was produced here)',
+        at: resultMarkupAt,
+      });
     }
 
     // TRUNCATED_PAYLOAD — the call/parameter structure never closed.
