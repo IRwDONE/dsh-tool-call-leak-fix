@@ -22,14 +22,18 @@ const ROOT = path.resolve(HERE, '..');
 const SESSIONS = path.join(os.homedir(), '.dsh', 'sessions');
 
 const curPath = path.join(ROOT, 'plugin', 'src', 'detect.js');
-const prePath = path.join(HERE, '_pre-d10-detect.mjs');
+const pre10Path = path.join(HERE, '_pre-d10-detect.mjs');
+const pre11Path = path.join(HERE, '_pre-d11-detect.mjs');
 const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 16);
 
 console.log('current   detect.js sha16=' + sha(curPath));
-console.log('pre-D-10  detect.js sha16=' + sha(prePath));
+console.log('pre-D-10  detect.js sha16=' + sha(pre10Path) + '  (R12 baseline)');
+console.log('pre-D-11  detect.js sha16=' + sha(pre11Path) + '  (D-10 baseline)');
 
 const cur = await import(pathToFileURL(curPath).href);
-const pre = await import(pathToFileURL(prePath).href);
+const pre = await import(pathToFileURL(pre10Path).href);
+let pre11 = null;
+try { pre11 = await import(pathToFileURL(pre11Path).href); } catch { /* optional */ }
 
 function walk(dir, out = []) {
   let entries;
@@ -47,9 +51,11 @@ console.log('session log files = ' + files.length);
 
 let events = 0, withText = 0, textOnly = 0, textPlusCalls = 0;
 let damagedNow = 0, silentNow = 0, damagedPre = 0, d10Only = 0;
+let damagedPre11 = 0, d11Only = 0;
 let damagedNowWithCalls = 0;
 let parseErrors = 0, frameErrors = 0;
 const d10OnlyHits = [];
+const d11OnlyHits = [];
 
 for (const file of files) {
   let blob;
@@ -81,18 +87,37 @@ for (const file of files) {
     if (a.damaged && toolCalls > 0) damagedNowWithCalls += 1;
     if (a.damaged && toolCalls === 0) silentNow += 1;
     if (b.damaged) damagedPre += 1;
-    if (a.damaged && !b.damaged) {
-      d10Only += 1;
-      d10OnlyHits.push({
-        session: path.basename(path.dirname(file)),
-        codes: a.findings.map((f) => f.code + ':' + f.severity),
-        silentFailure: a.silentFailure,
-        textLength: text.length,
-        // Raw-dialect evidence: the prefixed form exists, bare markers do not.
-        hasNamespacePrefix: /<[A-Za-z_][A-Za-z0-9_.-]*:(?!\/)/.test(text) || /<\/([A-Za-z_][A-Za-z0-9_.-]*):/.test(text),
-        hasBareInvoke: text.indexOf('<' + 'invoke') !== -1,
-        hasBareParameter: text.indexOf('<' + 'parameter') !== -1,
-      });
+    if (pre11) {
+      // `c` is the D-10 revision (pre-D-11). Clean delta definitions:
+      //   d10Only = damaged at D-10 but NOT at R12
+      //   d11Only = damaged now but NOT at D-10
+      const c = pre11.scanAssistantText(text, undefined, meta);
+      if (c.damaged) damagedPre11 += 1;
+      if (c.damaged && !b.damaged) {
+        d10Only += 1;
+        d10OnlyHits.push({
+          session: path.basename(path.dirname(file)),
+          codes: c.findings.map((f) => f.code + ':' + f.severity),
+          silentFailure: c.silentFailure,
+          textLength: text.length,
+          // Raw-dialect evidence: the prefixed form exists, bare markers do not.
+          hasNamespacePrefix: /<[A-Za-z_][A-Za-z0-9_.-]*:(?!\/)/.test(text) || /<\/([A-Za-z_][A-Za-z0-9_.-]*):/.test(text),
+          hasBareInvoke: text.indexOf('<' + 'invoke') !== -1,
+          hasBareParameter: text.indexOf('<' + 'parameter') !== -1,
+        });
+      }
+      if (a.damaged && !c.damaged) {
+        d11Only += 1;
+        d11OnlyHits.push({
+          session: path.basename(path.dirname(file)),
+          codes: a.findings.map((f) => f.code + ':' + f.severity),
+          silentFailure: a.silentFailure,
+          textLength: text.length,
+          hasResultMarkup: /<tool[-_]?result(?![A-Za-z0-9:_-])/.test(text),
+          // D-10-vs-D-11 separation: was it already visible at the R12 baseline?
+          wasVisibleAtR12: b.damaged,
+        });
+      }
     }
   }
 }
@@ -107,8 +132,12 @@ console.log(JSON.stringify({
   damagedCurrentNoToolCalls: silentNow,
   damagedPreD10: damagedPre,
   damagedOnlyViaD10: d10Only,
+  damagedPreD11: pre11 ? damagedPre11 : null,
+  damagedOnlyViaD11: pre11 ? d11Only : null,
   parseErrorsSkipped: parseErrors,
   frameErrorsSkipped: frameErrors,
 }, null, 2));
+console.log('\n=== damaged ONLY via D-11 (vs the D-10 revision) ===');
+for (const h of d11OnlyHits) console.log(JSON.stringify(h));
 console.log('\n=== damaged ONLY via D-10 ===');
 for (const h of d10OnlyHits) console.log(JSON.stringify(h));

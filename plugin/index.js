@@ -115,6 +115,8 @@ function newMessageId() {
  */
 const SOURCE_RUNTIME_CONTEXT = 'runtime-context';
 const SOURCE_PLUGIN = 'plugin:' + PACKAGE_NAME;
+/** Assembled rather than written literally: never emit a contiguous closing tag. */
+const LT_TEXT = '<';
 
 /**
  * Build a plugin-authored user message.
@@ -500,6 +502,92 @@ export function apply(ctx, rawConfig) {
         pending.delete(sessionId);
       } catch {
         /* serial dispatch propagates listener errors into the turn: swallow. */
+      }
+    }),
+  );
+
+  /* M7 — R16 fork brief (2026-10-31).
+     A forked session inherits the parent's history in its request, and that
+     history may contain leaked call markup. We cannot rewrite it (D-8: the
+     llm/stream request is frozen), but `agent/pre-step` IS writable and runs
+     *before* the step is sent — so the first step of a fork gets one short,
+     code-generated briefing that marks the inherited artifacts as invalid
+     instead of letting the model imitate them. Bounded to once per session;
+     never rejects a step; never takes over another listener's decision. */
+  const briefed = new Set();
+
+  /**
+   * The session header of a seeded/forked session, or null.
+   *
+   * D-12 (2026-10-31): the fork marker lives on `session.header` (a
+   * `SessionHeader`), **not** in an event stream. `Session` exposes no `events`
+   * property at all, and there is no bare `'session'` event — so an earlier
+   * version of this function read `session.events`, always found nothing, and
+   * made the whole mechanism a silent no-op (the same failure class as D-8/M5).
+   */
+  function forkHeadline(agent) {
+    try {
+      const header = agent && agent.session && agent.session.header;
+      if (!header || typeof header !== 'object') return null;
+      const parent = typeof header.parentSession === 'string' ? header.parentSession : '';
+      if (!parent && header.isSeeded !== true) return null;
+      return { parent, seeded: header.isSeeded === true };
+    } catch {
+      return null;
+    }
+  }
+
+  function forkBriefText(config) {
+    if (typeof config.forkBriefNote === 'string' && config.forkBriefNote.length > 0) {
+      return config.forkBriefNote;
+    }
+    if (config.lang === 'en') {
+      return (
+        '[Session brief] This session continues from a previous one. If the history ' +
+        'contains stray call markup — a `' + LT_TEXT + '/` closing prefix, or a parameter ' +
+        'opening marker — with no matching tool card, those outputs were DAMAGED and ' +
+        'never executed. Ignore them, do not imitate them, and when you need to make a ' +
+        'call again, do it in small chunks (<= 100 lines, ideally <= 40).'
+      );
+    }
+    return (
+      '【会话简报】本会话继承自上一个会话。若历史里出现**孤立的调用标记**' +
+      '（以 `' + LT_TEXT + '/` 开头的闭合标记、或参数开场标记）却**没有对应的工具调用卡**，' +
+      '那些都是**损坏输出、未执行** —— 请忽略它们、不要模仿，' +
+      '需要时用**小块**（≤100 行，必要时 ≤40 行）重新发起调用。'
+    );
+  }
+
+  install(ctx, () =>
+    ctx.on('agent/pre-step', async function preStep(payload, next) {
+      const decision = await next();
+      try {
+        if (config.forkBrief !== true) return decision;
+        if (!decision || decision.kind !== 'enter') return decision;
+        const agent = payload && payload.agent;
+        const sessionId = agent && typeof agent.id === 'string' ? agent.id : '';
+        if (!sessionId || briefed.has(sessionId)) return decision;
+        const head = forkHeadline(agent);
+        if (!head) return decision;
+        briefed.add(sessionId);
+        const noteText = forkBriefText(config);
+        const note = pluginMessage(noteText, SOURCE_RUNTIME_CONTEXT);
+        // D-12 confirmation recipe: with debugLog on, this line appears in a real
+        // fork's first step. If it never appears, the header read is wrong again.
+        log({
+          where: 'pre-step.forkBrief',
+          sessionId,
+          turn: payload.turn,
+          step: payload.step,
+          parent: head.parent,
+          seeded: head.seeded,
+          textLength: noteText.length,
+        });
+        // Spread so fields such as `startsRequestSeries` survive (practices.md).
+        const messages = Array.isArray(decision.messages) ? decision.messages : [];
+        return { ...decision, messages: [note, ...messages] };
+      } catch {
+        return decision;
       }
     }),
   );

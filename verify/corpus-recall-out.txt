@@ -1,21 +1,32 @@
-current   detect.js sha16=16227b7baf2b4686
-pre-D-10  detect.js sha16=4ea090ce921e181c
-session log files = 75
+current   detect.js sha16=89a93d1fb117f5b5
+pre-D-10  detect.js sha16=4ea090ce921e181c  (R12 baseline)
+pre-D-11  detect.js sha16=16227b7baf2b4686  (D-10 baseline)
+session log files = 78
 
 === independently computed ===
 {
-  "assistantMessageEvents": 3578,
-  "assistantMessagesWithText": 2569,
-  "assistantMessagesTextOnlyNoToolCalls": 190,
-  "assistantMessagesWithTextAndToolCalls": 2379,
-  "damagedCurrent": 27,
+  "assistantMessageEvents": 3734,
+  "assistantMessagesWithText": 2671,
+  "assistantMessagesTextOnlyNoToolCalls": 203,
+  "assistantMessagesWithTextAndToolCalls": 2468,
+  "damagedCurrent": 34,
   "damagedCurrentWithToolCalls": 5,
-  "damagedCurrentNoToolCalls": 22,
-  "damagedPreD10": 26,
-  "damagedOnlyViaD10": 1,
+  "damagedCurrentNoToolCalls": 29,
+  "damagedPreD10": 27,
+  "damagedOnlyViaD10": 6,
+  "damagedPreD11": 33,
+  "damagedOnlyViaD11": 1,
   "parseErrorsSkipped": 0,
   "frameErrorsSkipped": 0
 }
 
+=== damaged ONLY via D-11 (vs the D-10 revision) ===
+{"session":"session-929b19b0-6f4f-4ecf-8a06-7cc92e912727","codes":["MARKUP_LEAKED_AS_TEXT:error"],"silentFailure":true,"textLength":43,"hasResultMarkup":true,"wasVisibleAtR12":false}
+
 === damaged ONLY via D-10 ===
+{"session":"session-e6fe3832-6554-4ad4-a569-804192ec9a5b","codes":["MARKUP_LEAKED_AS_TEXT:error"],"silentFailure":true,"textLength":2118,"hasNamespacePrefix":true,"hasBareInvoke":false,"hasBareParameter":false}
+{"session":"session-929b19b0-6f4f-4ecf-8a06-7cc92e912727","codes":["MARKUP_LEAKED_AS_TEXT:error"],"silentFailure":true,"textLength":499,"hasNamespacePrefix":true,"hasBareInvoke":false,"hasBareParameter":false}
+{"session":"session-929b19b0-6f4f-4ecf-8a06-7cc92e912727","codes":["MARKUP_LEAKED_AS_TEXT:error"],"silentFailure":true,"textLength":1004,"hasNamespacePrefix":true,"hasBareInvoke":false,"hasBareParameter":false}
+{"session":"session-a0380553-1355-4421-8fd0-65dec100b8b0","codes":["MARKUP_LEAKED_AS_TEXT:error"],"silentFailure":true,"textLength":803,"hasNamespacePrefix":true,"hasBareInvoke":false,"hasBareParameter":false}
+{"session":"session-a0380553-1355-4421-8fd0-65dec100b8b0","codes":["UNPAIRED_CLOSING_TAG:warn","UNPAIRED_CLOSING_TAG:warn"],"silentFailure":true,"textLength":412,"hasNamespacePrefix":true,"hasBareInvoke":false,"hasBareParameter":false}
 {"session":"session-c8741511-54b9-4cc9-be7e-8860fb22234f","codes":["MARKUP_LEAKED_AS_TEXT:error","UNPAIRED_CLOSING_TAG:warn"],"silentFailure":true,"textLength":745,"hasNamespacePrefix":true,"hasBareInvoke":false,"hasBareParameter":false}

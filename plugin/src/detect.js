@@ -82,7 +82,7 @@ const CJK_PUNCT_RE = /[\u3000-\u303f\uff01-\uff5e]/;
  */
 const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR';
 
-/** @type {{enabled: boolean, maxLines: number, maxChars: number, closingTagCount: number, endSequenceRepeats: number, maxCorrectionsPerTurn: number, lang: 'zh'|'en', noopCheck: boolean, debugLog: boolean, debugLogPath: string, contextGuard: boolean, contextGuardNote: string}} */
+/** @type {{enabled: boolean, maxLines: number, maxChars: number, closingTagCount: number, endSequenceRepeats: number, maxCorrectionsPerTurn: number, lang: 'zh'|'en', noopCheck: boolean, debugLog: boolean, debugLogPath: string, contextGuard: boolean, contextGuardNote: string, forkBrief: boolean, forkBriefNote: string}} */
 export const DEFAULT_CONFIG = {
   enabled: true,
   maxLines: 100,
@@ -112,10 +112,18 @@ export const DEFAULT_CONFIG = {
   contextGuard: false,
   /** R12: replacement note; an empty string uses the built-in localized note. */
   contextGuardNote: '',
+  /**
+   * R16 (M7): brief a *forked* session before its first model step. A fork
+   * inherits a history we cannot rewrite (D-8), but we can mark its damaged
+   * artifacts as invalid up front instead of letting the model imitate them.
+   */
+  forkBrief: true,
+  /** R16: briefing text; an empty string uses the built-in localized text. */
+  forkBriefNote: '',
 };
 
 /** Non-empty string fields; anything else falls back to the default. */
-const STRING_KEYS = ['debugLogPath', 'contextGuardNote'];
+const STRING_KEYS = ['debugLogPath', 'contextGuardNote', 'forkBriefNote'];
 
 /**
  * R7: every numeric field must be an integer >= its minimum, otherwise it falls
@@ -149,6 +157,8 @@ function defaultCopy() {
     debugLogPath: DEFAULT_CONFIG.debugLogPath,
     contextGuard: DEFAULT_CONFIG.contextGuard,
     contextGuardNote: DEFAULT_CONFIG.contextGuardNote,
+    forkBrief: DEFAULT_CONFIG.forkBrief,
+    forkBriefNote: DEFAULT_CONFIG.forkBriefNote,
   };
 }
 
@@ -539,7 +549,7 @@ export function mergeConfig(partial) {
   try {
     if (!isPlainObject(partial)) return out;
 
-    for (const key of ['enabled', 'noopCheck', 'debugLog', 'contextGuard']) {
+    for (const key of ['enabled', 'noopCheck', 'debugLog', 'contextGuard', 'forkBrief']) {
       let value;
       try {
         value = partial[key];

@@ -39,10 +39,12 @@ export function sanitizeMessages(messages, opts) {}   // R12 (M5) — added 2026
   debugLogPath: '',              // ★R10：日志目标；空串时由系统临时目录推导
   contextGuard: false,           // ★R12：M5 上下文净化开关（默认关；本机 harness 上无效，见 D-8）
   contextGuardNote: '',          // ★R12：替换注记；空串=内置中英文注记
+  forkBrief: true,               // ★R16（M7）：fork 会话在首步之前注入一次"会话简报"
+  forkBriefNote: '',             // ★R16：简报文本；空串=内置中英文文本
 }
 ```
 
-**共 12 个键**（R9 后 8 个，R10 再 +2，R12 再 +2）。`mergeConfig(partial)` → 新对象，缺字段用默认值补齐；非法值回退默认。
+**共 14 个键**（R9 后 8 个，R10 再 +2，R12 再 +2，R16 再 +2）。`mergeConfig(partial)` → 新对象，缺字段用默认值补齐；非法值回退默认。
 测试请**从 `DEFAULT_CONFIG` 推导键集合**，不要硬编码字符串。
 
 **裁定 R10（2026-10-28）—— 诊断日志开关：**
@@ -378,3 +380,35 @@ silentFailure === (damaged === true && meta?.hasToolCalls === false)
   → **M4 不会注入**；护栏亦已验证：只提及字段名（不带尖括号标签）不误报。
 - **作用域仅限 assistant 文本**：`scanToolArguments` **不**加入该规则 ——
   否则"写一份解释该格式的文档"会被 deny（正是 D-1 那一类误报）。
+
+**裁定 R16（2026-10-31）—— M7「fork 简报」：**在 fork 会话的首个模型步之前**，用代码把继承来的损坏产物标记为无效**
+
+- **要达成的目标（用户口径）**：出故障之后 fork 出去，插件生效，**fork 出来的对话能正常继续**，
+  而不是被父会话里"泄漏到正文的调用文本"继续带偏。
+- **为什么不是 M5**：M5（改写模型可见历史）直连被冻结请求挡住（D-8）——`llm/stream` 只能读不能写。
+  所以**不删除**继承来的样本；换一条**可写**的缝来抵消它们。
+- **可写的缝**：`agent/pre-step`（waterfall，`(payload, next)`，返回 `PreStepDecision`）。
+  它在**该步被发送之前**运行，因此能影响**当前这一步**要发的内容。
+- **如何识别"我是 fork"（实测证据 + ⚠️ 缺陷 D-12 的教训）**：真实 fork 会话确实带着
+  `parentSession` 与 `isSeeded`，并形成链
+  `929b19b0 → c8741511 → b1f27299 → a9c78342`（最后那个就是最初 6 处损坏的会话）。
+  **但取法必须是 `agent.session.header`**（`readonly header: SessionHeader`，字段 `parentSession?` / `isSeeded`）。
+  ⚠️ **`Session` 没有 `events` 属性**，也**没有裸的 `'session'` 事件** ——
+  初版实现读了 `agent.session.events` 去找 `type === 'session'`，于是**永远返回 null**、
+  整个 M7 变成**静默 no-op**（与本项目的 D-8/M5 同型失败）。
+  日志文件的**第一行**确实是那个 header，但那是**物理头部行**，不在事件流里。
+  **确认配方**：`debugLog: true` + 一次真实 fork 的首步 → 必须出现 `pre-step.forkBrief` 一行
+  （含 `parent` / `seeded`）；不出现就是取法又错了。
+- **行为**：`config.forkBrief === true` 且该会话**尚未简报过**且头部显示 `parentSession` 存在或
+  `isSeeded === true` 时，**恰好一次**把一个代码生成的 `UserMessage`
+  （`source.kind = 'runtime-context'`）**前置**到该步的消息里，内容为"会话简报"：
+  历史里那些**孤立的调用标记（没有对应工具卡）都是损坏输出、未执行**，请忽略、不要模仿，
+  需要时用小块重发。文本按 `lang` 中/英，或由 `forkBriefNote` 覆盖。
+- **waterfall 纪律（必须遵守）**：先 `await next()`；`decision.kind !== 'enter'` 一律原样返回；
+  改写时**必须 spread**（`{ ...decision, messages: [note, ...messages] }`），
+  否则会丢掉 `startsRequestSeries` 之类的字段；**绝不 reject 步骤**；任何异常都返回原 decision。
+- **有界**：每个 session **最多一次**（按 `sessionId` 记在一个 Set 里）；用 `debugLog` 时会记
+  `pre-step.forkBrief` 一行。**非 fork 会话零开销**（一次配置判断 + 一次 Set 查询）。
+- **诚实标注**：M7 **不删除**继承的样本，只是**在模型面前把它们标记为无效**——
+  它的有效性（模型是否真的停止模仿、是否恢复小块调用）**尚未在真实 fork 中观测到**，
+  需要一次现场验收。它**不能**替代 M5：真正的"历史净化"仍需要 harness 给出可写接缝。

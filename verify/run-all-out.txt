@@ -1,13 +1,13 @@
 ### GIT HEAD
-ee911b0 test(D-10): namespace-dialect assertions (positive + guards + zero-drift) -> 187 PASS
+a7b897b fix(D-11/R15): catch fabricated tool-result markup in assistant prose (real-session evidence)
 
 ### HASHES BEFORE
-9d038734b249ef3b68ab771a65aa5497fba60cc7a8735f81b4b304f02f164292 *plugin/index.js
-16227b7baf2b4686ddaae5aba7aa50aff29ca808501c550971f389b1174a67fd *plugin/src/detect.js
+e7faf003d0cdf32ac4eef3de052aa97ba602d353b4591ed864f5f6abc6a4bdc6 *plugin/index.js
+89a93d1fb117f5b59d183b5e678e84e6fade678b1843301a97db3f2faa767029 *plugin/src/detect.js
 c26fac16c3150054d564d5bc4b292cc64660e635222eadb015a98af9228d1275 *plugin/package.json
-3ec76bfad9228d9ddab94cfa02e2fe56f5373b8bc50a85e4f1b0ec4464e38951 *plugin/cordis.patch.yml
-c51ff70dc579105d65ce77eea84bcccdca2c48bf77c8fc83a6a846e2166e0248 *tests/run.mjs
-08a80ce9c4b9b9d2243730c0a24c1aff87fcdfd2286956287659df495de94810 *docs/INTERFACE.md
+d0167b5b4da3794eb35a751cd2fa6e0758ccefcbc38838362bbda28f23b1c6ce *plugin/cordis.patch.yml
+2c0c257f2651ccc51c6d7a8328d3ca22b56e22b6468476fd22e7be3a607a47db *tests/run.mjs
+9b350510e89d0951e1b5b213f9ec74d9898b4cf75492185940133e704add3f83 *docs/INTERFACE.md
 
 ### node --check (all JS)
 SYNTAX OK  plugin/index.js
@@ -29,14 +29,14 @@ PATCH: uses - insert:
 
 ### plugin/ file inventory (deliverables)
 plugin:
-total 60
--rw-r--r-- 1 197609 22250 Oct 30 16:34 README.md
--rw-r--r-- 1 197609  1220 Oct 30 17:33 cordis.patch.yml
+total 64
+-rw-r--r-- 1 197609 22531 Oct 31 01:40 README.md
+-rw-r--r-- 1 197609  1469 Oct 31 02:11 cordis.patch.yml
 -rw-r--r-- 1 197609   741 Oct 30 01:04 icon.svg
--rw-r--r-- 1 197609 21547 Oct 30 16:02 index.js
+-rw-r--r-- 1 197609 25096 Oct 31 01:59 index.js
 drwxr-xr-x 1 197609     0 Oct 30 01:04 locale
 -rw-r--r-- 1 197609  1077 Oct 30 02:36 package.json
-drwxr-xr-x 1 197609     0 Oct 30 23:12 src
+drwxr-xr-x 1 197609     0 Oct 31 02:04 src
 
 plugin/locale:
 total 2
@@ -44,19 +44,19 @@ total 2
 -rw-r--r-- 1 197609 269 Oct 30 01:04 zh.json
 
 plugin/src:
-total 40
--rw-r--r-- 1 197609 40179 Oct 30 23:12 detect.js
+total 44
+-rw-r--r-- 1 197609 42033 Oct 31 02:04 detect.js
 
 ### tests/run.mjs (author's harness, run by verifier)
 tests/run.mjs EXIT=0
-PASS  P1[D-10] 带命名空间前缀的泄漏标记 → damaged
-PASS  P2[D-10] 同一文本 + hasToolCalls:false → silentFailure（M4 的唯一触发条件）
-PASS  P3[D-10] 带前缀的尾部连续结束序列 → END_SEQUENCE_MULTIPLIED 且按 R4 门槛 deny
-PASS  P4[D-10 护栏] 含冒号 / 带前缀但非调用标记的文本不得被误判
-PASS  P5[D-10 零漂移] 不含冒号的文本行为不变（规范化必须早退）
+
+== Q. D-11 伪造工具结果（R15）：结果形状的标记出现在正文里 ==
+PASS  Q1[D-11] 该步无工具调用 + 正文含结果形状标记 → damaged 且 silentFailure
+PASS  Q2[D-11 边界] 同文本但该步确有工具调用 → damaged 仍真，silentFailure 为假（R1 挡住注入）
+PASS  Q3[D-11 护栏] 只提到字段名（无尖括号标签）不得误报
 
 == 汇总 ==
-PASS 187 / FAIL 0
+PASS 190 / FAIL 0
 
 ### verify/probe.mjs (independent detector probe)
 probe EXIT=0
@@ -65,37 +65,37 @@ probe EXIT=0
 PASS  5MB plain text: no throw, <5000ms
 PASS  5MB plain text: length reported
 PASS  5MB of closing tags: no throw, <5000ms
-  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=21.8
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=19.3
 PASS  ~2.6MB call markup via args: no throw, <5000ms
-  call-markup args: action=deny ms=27.9 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+  call-markup args: action=deny ms=23.0 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
 PASS  pathological < / > flood: no throw, <5000ms
 PASS  pathological flood via args: no throw, <5000ms
 
 == SUMMARY ==
-PASS=480  FAIL=0  NOTES=4  DEFECTS=0
+PASS=533  FAIL=0  NOTES=4  DEFECTS=0
 
 --- raw snapshot ---
 frozenCodesProduced=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","INTERNAL_ERROR","MARKUP_LEAKED_AS_TEXT","MISSING_OPENING_MARKUP","PAYLOAD_TOO_LONG","SUSPICIOUS_NOOP_RESULT","TRUNCATED_PAYLOAD","UNPAIRED_CLOSING_TAG"]
 
 ### verify/probe-index.mjs (independent index.js wiring probe)
-probe-index EXIT=0
-== 7. no payload text hardcoded / leaked into messages ==
-PASS  M1-removed: no prompt section is registered, so no prompt text can leak
-PASS  M1-removed: no registered prompt text contains the canary
-PASS  M4 injected correction contains no payload canary
-PASS  index.js source does not hardcode any fixture canary
-
+probe-index EXIT=1
 == 8. index.js module hygiene ==
 PASS  index.js source is non-empty and exports apply
 PASS  index.js has no top-level await import side effects (loads cleanly)
 
 == SUMMARY ==
-PASS=102  FAIL=0  NOTES=2  DEFECTS=0
+PASS=124  FAIL=1  NOTES=2  DEFECTS=1
+
+--- failed checks ---
+  * R16 (documented agent.session.header): a forked session gets a brief prepended  :: messages=1 (expected 2)
+
+--- defect list ---
+  [high] D-12 M7/R16 cannot fire against the documented harness interface: forkHeadline() reads `agent.session.events` and looks for an event of type "session", but Session exposes `header: SessionHeader` and has no `events` member (dsh-session-reference/lib/typert.host.js:557 declaration), and known-event-types.js has no bare "session" event type. So it returns null for every real session and the fork brief is a silent no-op (the exact failure class this project exists to remove). Fix: read `agent.session.header` -> { parentSession?, isSeeded }.
 
 ### HASHES AFTER (must equal BEFORE; a difference means the artifact moved during the run)
-9d038734b249ef3b68ab771a65aa5497fba60cc7a8735f81b4b304f02f164292 *plugin/index.js
-16227b7baf2b4686ddaae5aba7aa50aff29ca808501c550971f389b1174a67fd *plugin/src/detect.js
+e7faf003d0cdf32ac4eef3de052aa97ba602d353b4591ed864f5f6abc6a4bdc6 *plugin/index.js
+89a93d1fb117f5b59d183b5e678e84e6fade678b1843301a97db3f2faa767029 *plugin/src/detect.js
 c26fac16c3150054d564d5bc4b292cc64660e635222eadb015a98af9228d1275 *plugin/package.json
-3ec76bfad9228d9ddab94cfa02e2fe56f5373b8bc50a85e4f1b0ec4464e38951 *plugin/cordis.patch.yml
-c51ff70dc579105d65ce77eea84bcccdca2c48bf77c8fc83a6a846e2166e0248 *tests/run.mjs
-08a80ce9c4b9b9d2243730c0a24c1aff87fcdfd2286956287659df495de94810 *docs/INTERFACE.md
+d0167b5b4da3794eb35a751cd2fa6e0758ccefcbc38838362bbda28f23b1c6ce *plugin/cordis.patch.yml
+2c0c257f2651ccc51c6d7a8328d3ca22b56e22b6468476fd22e7be3a607a47db *tests/run.mjs
+9b350510e89d0951e1b5b213f9ec74d9898b4cf75492185940133e704add3f83 *docs/INTERFACE.md

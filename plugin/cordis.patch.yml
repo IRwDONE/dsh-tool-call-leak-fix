@@ -23,3 +23,7 @@
         # build (D-8 — agent-loop hands llm/stream a deep-frozen request), so its
         # wiring and its switch were removed. Only the implementation is kept, in
         # src/detect.js (sanitizeMessages), ready for a future writable seam.
+        # R16/M7 fork brief: a forked session gets one short code-generated
+        # briefing before its first step, marking the inherited damaged call
+        # markup as invalid (that history cannot be rewritten — D-8).
+        forkBrief: true

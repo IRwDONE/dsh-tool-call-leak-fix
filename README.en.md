@@ -61,6 +61,7 @@ Three guards, each one silent until something is actually wrong:
 2. **Nudge (M3)** — after a **write-class** tool runs, look for **machine-readable** evidence that it did nothing (`noop: true`, `status: "noop"`, `written: 0` with a real payload) and append a short note. It does **not** guess from free text.
 3. **Self-heal (M4)** — watch committed assistant messages. If a step's output is damaged **and** that step produced **no tool call**, then at the moment the turn is about to close, inject a correction so the turn stays open and the model re-issues the call. This is the mechanism aimed at the example in §1.
    It is **two-tier, and bounded**: the first correction says "that step did not run — here is how to retry"; if the very next step is damaged **again** (which really happened in a live session), one **shorter, harder** instruction follows — "this step: issue exactly one call, keep it under 40 lines, add no explanation". The cap is `maxCorrectionsPerTurn` (this bundle ships `2`); at the cap it stops instead of looping.
+4. **Fork brief (M7)** — a **forked session inherits the parent's history**, and forking is exactly what you do after a failure. That history cannot be rewritten (frozen request, D-8), but the plugin can place **one code-generated briefing before the fork's first model step**: stray call markup with **no matching tool card** is declared **damaged and never executed** — ignore it, do not imitate it, and re-issue calls in small chunks. **Once per session**; zero overhead for sessions that are not forks.
 
 **Deliberately not done**: **no prompt injection at all** (a system-prompt rule block was implemented and later **removed by design decision** — prompt-level rules are not enforceable and cost attention), and no forced small-chunk write tool.
 
@@ -129,6 +130,8 @@ The row's `config` is **validated and normalised**; invalid values **fall back t
 | `debugLogPath` | `''` | empty ⇒ derived from the **system temp directory** (never hardcoded) |
 | `contextGuard` | `false` | **internal, not wired** — see [Limitations](#8-limitations) |
 | `contextGuardNote` | `''` | **internal, not wired** |
+| `forkBrief` | `true` | **R16 (M7)**: a forked session gets one "session brief" **before its first step**, marking the inherited damaged artifacts as invalid. Set `false` to disable |
+| `forkBriefNote` | `''` | **R16**: briefing text; empty ⇒ the built-in localized text |
 
 ## 6. Verified vs. not verified
 
@@ -164,7 +167,7 @@ Verification is split deliberately: "the code does what the contract says" is pr
 
 ### 7.3 Docs and evidence
 
-- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R15), including the ones changed after evidence contradicted them.
+- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R16), including the ones changed after evidence contradicted them.
 - `docs/CONTRACTS.md` — the pre-implementation contract dig; every claim carries a file path and line number.
 - `docs/DESIGN.md` — failure taxonomy, trigger conditions, mechanism design, and the corrections made after measurement.
 - `docs/PROMPTS.md` — the prevention/correction/denial texts, kept even though the plugin no longer injects any prompt (available for manual use).
@@ -181,6 +184,7 @@ Listed because they are the useful part: two of them were only findable by readi
 | `D-8` | high (accepted) | `M5` cannot rewrite a frozen request ⇒ a **capability gap**, not a bug. Wiring removed, implementation kept |
 | `D-10` | high | The detector only knew **bare** tags, so it could not see the **namespace-prefixed** form that a real failure used (`<antml:invoke>` / `<antml:parameter>`) ⇒ `damaged=false` ⇒ M4 never fired and the turn closed silently. Fixed (R14: structural analysis runs on a namespace-stripped shadow copy; text without a colon is returned as the identical string, so nothing drifts). **Corpus-level check (an invariant, not a snapshot)**: running every real session's text through the pre- and post-fix detector changes the verdict for exactly **1** message — the very fork the user hit. Absolute totals keep growing because the log is append-only (verification itself writes into it), so they are not a baseline |
 | `D-11` | high | **Fabricated tool result**: a step with `toolCallCount === 0` whose text was a `tool_result`-shaped block around a version string (observed in a real session) — the model reported a result it **never obtained**, i.e. a **false fact**. Fixed (R15: result-shaped markup in assistant prose reports `MARKUP_LEAKED_AS_TEXT`; the existing code is reused, `meta` is not consulted, and no natural-language sentence is required; when the step *did* make tool calls, `silentFailure` stays false so R1 blocks the injection) |
+| `D-12` | high | **M7 read an API that does not exist**: the first version read `agent.session.events` looking for a `type === 'session'` entry, but `Session` has no `events` and no such event (the fork marker lives on `session.header`) ⇒ the function always returned null ⇒ **M7 was a silent no-op**. Caught by independent verification with three independent proofs (interface declaration, implementation, runtime event catalog). Fixed by reading `session.header`. **Same failure class as D-8/M5: a plausible-looking API that is not there, then silently doing nothing** |
 | `D-5 / D-6 / D-7 / D-9` | low | Contract drift, a hardcoded local path in a default, a diagnostic switch left on in the shipped patch, and a self-contradictory doc paragraph. All fixed |
 
 ## 8. Limitations

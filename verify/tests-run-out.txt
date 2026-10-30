@@ -220,5 +220,10 @@ PASS  P3[D-10] 带前缀的尾部连续结束序列 → END_SEQUENCE_MULTIPLIED 
 PASS  P4[D-10 护栏] 含冒号 / 带前缀但非调用标记的文本不得被误判
 PASS  P5[D-10 零漂移] 不含冒号的文本行为不变（规范化必须早退）
 
+== Q. D-11 伪造工具结果（R15）：结果形状的标记出现在正文里 ==
+PASS  Q1[D-11] 该步无工具调用 + 正文含结果形状标记 → damaged 且 silentFailure
+PASS  Q2[D-11 边界] 同文本但该步确有工具调用 → damaged 仍真，silentFailure 为假（R1 挡住注入）
+PASS  Q3[D-11 护栏] 只提到字段名（无尖括号标签）不得误报
+
 == 汇总 ==
-PASS 187 / FAIL 0
+PASS 190 / FAIL 0

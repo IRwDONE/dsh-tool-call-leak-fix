@@ -207,6 +207,13 @@ try {
   preD10 = await import(pathToFileURL(path.join(HERE, '_pre-d10-detect.mjs')).href);
 } catch { /* optional: corpus/delta checks are skipped when unavailable */ }
 
+/* Pre-D-11 detector (the D-10 revision, saved as verify/_pre-d11-detect.mjs) —
+ * isolates the D-11 delta from the D-10 delta. */
+let preD11 = null;
+try {
+  preD11 = await import(pathToFileURL(path.join(HERE, '_pre-d11-detect.mjs')).href);
+} catch { /* optional */ }
+
 section('0. provenance');
 const detectSrc = readFileSync(DETECT_PATH, 'utf8');
 console.log('detect.js   sha256[0:16]=' + sha256(detectSrc) + '  bytes=' + Buffer.byteLength(detectSrc));
@@ -246,6 +253,9 @@ const EXPECTED_VALUES = {
   /* R12: M5 context guard is OFF by default (it rewrites model-visible history). */
   contextGuard: false,
   contextGuardNote: '',
+  /* R16 (M7): fork brief. ON by default; empty note => built-in localized text. */
+  forkBrief: true,
+  forkBriefNote: '',
 };
 const KNOWN_KEYS = new Set([...Object.keys(EXPECTED_VALUES)]);
 const derivedKeys = Object.keys(DEFAULT_CONFIG).sort();
@@ -274,12 +284,12 @@ check('R10: default debugLogPath hardcodes no absolute machine path',
   }
   const undocumented = derivedKeys.filter((k) => !iface.includes(k));
   if (undocumented.length > 0) {
-    defect('D-5', 'low',
+    defect('D-13', 'low',
       'Contract drift: DEFAULT_CONFIG has key(s) ' + JSON.stringify(undocumented) +
-      ' that docs/INTERFACE.md never documents.');
+      ' that docs/INTERFACE.md never documents (it still states "共 12 个键").');
   } else {
-    note('R10 documented', 'docs/INTERFACE.md documents all ' + derivedKeys.length +
-      ' config keys (D-5 resolved by the 2026-10-29 R10 ruling)');
+    note('config keys documented', 'docs/INTERFACE.md documents all ' + derivedKeys.length +
+      ' config keys');
   }
   if (DEFAULT_CONFIG.debugLogPath !== '') {
     defect('D-6', 'low',
@@ -379,6 +389,20 @@ for (const [label, input] of [
   check('R12: contextGuard settings do not leak into other defaults',
     canon(mergeConfig({ contextGuard: true, contextGuardNote: 'X' })) ===
     canon({ ...DEFAULT_CONFIG, contextGuard: true, contextGuardNote: 'X' }));
+  /* R16 (M7 fork brief) config plumbing. */
+  check('R16: DEFAULT_CONFIG.forkBrief defaults to true', DEFAULT_CONFIG.forkBrief === true);
+  check('R16: mergeConfig({forkBrief:false}) -> false', mergeConfig({ forkBrief: false }).forkBrief === false);
+  check('R16: non-boolean forkBrief falls back to true',
+    ['no', 0, 1, null, undefined, {}].every((v) => mergeConfig({ forkBrief: v }).forkBrief === true),
+    JSON.stringify(['no', 0, 1, null, undefined, {}].map((v) => mergeConfig({ forkBrief: v }).forkBrief)));
+  check('R16: non-empty forkBriefNote is honored',
+    mergeConfig({ forkBriefNote: 'BRIEF' }).forkBriefNote === 'BRIEF');
+  check('R16: empty/non-string forkBriefNote falls back to ""',
+    mergeConfig({ forkBriefNote: '' }).forkBriefNote === '' &&
+    mergeConfig({ forkBriefNote: 42 }).forkBriefNote === '');
+  check('R16: forkBrief settings do not leak into other defaults',
+    canon(mergeConfig({ forkBrief: false, forkBriefNote: 'Y' })) ===
+    canon({ ...DEFAULT_CONFIG, forkBrief: false, forkBriefNote: 'Y' }));
 }
 for (const [label, partial, key, want] of [
   ['NaN', { maxLines: NaN }, 'maxLines', 100],
@@ -621,6 +645,111 @@ section('5b. D-10/R14: namespace tolerance — zero drift + dialect recall');
     check('R14: sanitizeMessages inherits namespace tolerance (prefixed damage is rewritten)',
       r.changed === true && r.messages[0].content.length === 1,
       JSON.stringify(r).slice(0, 160));
+  }
+}
+
+section('5c. D-11/R15: fabricated tool-result markup (assistant scope only)');
+{
+  const RT_OPEN = LT + 'tool-result' + GT;
+  const RT_CLOSE = LT + SL + 'tool-result' + GT;
+  const payloadText = RT_OPEN + 'v24.12.0 dirs ok' + RT_CLOSE;
+
+  /* (a) recall: fabricated result markup is damage even with no prose at all. */
+  {
+    const r = callNoThrow('scanAssistantText(fabricated tool-result)', () => scanAssistantText(payloadText));
+    if (r) {
+      harvest(r);
+      check('D-11: fabricated <tool-result> payload => damaged', r.damaged === true,
+        'codes=' + JSON.stringify(r.findings.map((f) => f.code)));
+      check('D-11: reports MARKUP_LEAKED_AS_TEXT (existing code, set unchanged)',
+        hasBlockingCodes(r.findings, ['MARKUP_LEAKED_AS_TEXT']),
+        JSON.stringify(r.findings.map((f) => f.code)));
+      check('D-11: result-specific detail is emitted (not the prose-leak detail)',
+        r.findings.some((f) => f.code === 'MARKUP_LEAKED_AS_TEXT' && /tool-result/.test(String(f.detail))),
+        JSON.stringify(r.findings.map((f) => f.detail)));
+    }
+  }
+
+  /* (b) variants: -_/none and namespace-prefixed. */
+  for (const [label, text] of [
+    ['underscore <tool_result>', LT + 'tool_result>x' + LT + SL + 'tool_result' + GT],
+    ['squashed <toolresult>', LT + 'toolresult>x' + LT + SL + 'toolresult' + GT],
+    ['namespace-prefixed <antml:tool-result>', LT + 'antml:tool-result>x' + LT + SL + 'antml:tool-result' + GT],
+  ]) {
+    const r = callNoThrow('scanAssistantText(' + label + ')', () => scanAssistantText(text));
+    if (!r) continue;
+    harvest(r);
+    check('D-11 variants: ' + label + ' => damaged', r.damaged === true,
+      'codes=' + JSON.stringify(r.findings.map((f) => f.code)));
+  }
+
+  /* (c) guardrail: bare field names (no angle-bracket tag) must NOT be damaged. */
+  for (const [label, text] of [
+    ['plain "tool_result" word', 'the tool_result field is undocumented here'],
+    ['plain "tool-result" word', 'see the tool-result envelope for details'],
+    ['plain "toolresult" word', 'toolresult and tool_result are the same to the model'],
+    ['closing tag only', LT + SL + 'tool-result' + GT],
+    ['near-miss <tool-resultx>', LT + 'tool-resultx>x' + LT + SL + 'tool-resultx' + GT],
+  ]) {
+    const r = callNoThrow('scanAssistantText(guardrail: ' + label + ')', () => scanAssistantText(text));
+    if (!r) continue;
+    check('D-11 guardrail: ' + label + ' is NOT damaged', r.damaged === false,
+      'findings=' + JSON.stringify(r.findings.map((f) => f.code)));
+  }
+
+  /* (d) impact containment (R1): damaged stays true, silentFailure must be false
+   * whenever the step DID make tool calls, so M4 never injects. */
+  {
+    const withCalls = scanAssistantText(payloadText, undefined, { hasToolCalls: true, toolCallCount: 1 });
+    const noCalls = scanAssistantText(payloadText, undefined, { hasToolCalls: false, toolCallCount: 0 });
+    check('D-11 containment: damaged === true regardless of tool calls',
+      withCalls.damaged === true && noCalls.damaged === true);
+    check('D-11 containment: hasToolCalls:true => silentFailure FALSE',
+      withCalls.silentFailure === false, 'silentFailure=' + withCalls.silentFailure);
+    check('D-11 containment: hasToolCalls:false => silentFailure true',
+      noCalls.silentFailure === true);
+    check('D-11 containment: meta does not change findings',
+      canon(withCalls.findings) === canon(noCalls.findings));
+    check('D-11 containment: a result-marked message that ALSO carries a tool-call is not silent',
+      scanAssistantText(payloadText, undefined, { hasToolCalls: true }).silentFailure === false);
+  }
+
+  /* (e) scope: `scanToolArguments` must NOT gain this rule. */
+  HB = 'args';
+  for (const [label, content] of [
+    ['small result marker leaf', payloadText],
+    ['large result marker leaf (deny-volume eligible)', bigHtml(40) + payloadText + '\n'],
+    ['doc quoting result tags (>=2000 chars)', (LT + 'tool-result>x' + LT + SL + 'tool-result' + GT + '\n').repeat(80)],
+  ]) {
+    const r = callNoThrow('scanToolArguments(' + label + ')', () => scanToolArguments('write', { content }));
+    if (!r) continue;
+    harvest(r);
+    check('D-11 scope: ' + label + ' => NOT deny', r.action !== 'deny', 'action=' + r.action);
+    check('D-11 scope: ' + label + ' => no MARKUP_LEAKED_AS_TEXT on a leaf',
+      !hasBlockingCodes(r.findings, ['MARKUP_LEAKED_AS_TEXT']),
+      'codes=' + JSON.stringify(r.findings.map((f) => f.code)));
+  }
+  HB = 'assistant';
+
+  /* (f) D-11 delta vs the immediately-preceding revision (pre-D-11 = 16227b7b):
+   * no existing fixture may change, and only the fabricated-result class flips. */
+  if (preD11) {
+    for (const f of ['v1-end-multiplied.txt', 'v2-missing-opening.txt', 'v3-leaked-markup.txt',
+      'ok-normal-html.txt', 'ok-normal-js.txt', 'ok-normal-markdown-table.txt',
+      'ok-short-text-few-tags.txt', 'ok-single-end-sequence.txt']) {
+      const text = readFixture(f);
+      const a = scanAssistantText(text);
+      const b = preD11.scanAssistantText(text);
+      check('D-11 zero-drift on fixture: ' + f,
+        a.damaged === b.damaged && canon(a.findings) === canon(b.findings) && canon(a.evidence) === canon(b.evidence),
+        'now=' + JSON.stringify(a.findings.map((x) => x.code)) +
+        ' pre=' + JSON.stringify(b.findings.map((x) => x.code)));
+    }
+    const p = preD11.scanAssistantText(payloadText);
+    check('D-11 delta: the fabricated-result payload was INVISIBLE pre-D-11',
+      p.damaged === false, 'pre codes=' + JSON.stringify(p.findings.map((x) => x.code)));
+  } else {
+    note('pre-D-11 module missing', 'D-11 delta checks skipped (verify/_pre-d11-detect.mjs not found)');
   }
 }
 

@@ -1,6 +1,6 @@
 
 == 0. provenance ==
-detect.js   sha256[0:16]=16227b7baf2b4686  bytes=40179
+detect.js   sha256[0:16]=89a93d1fb117f5b5  bytes=42033
 node        v24.19.0
 fixture     v1-end-multiplied.txt            bytes=  1406 lines=47 sha16=a247803f8d578730
 fixture     v2-missing-opening.txt           bytes=   511 lines=16 sha16=29c5426c1864a14f
@@ -29,6 +29,8 @@ PASS  DEFAULT_CONFIG.debugLog == false
 PASS  DEFAULT_CONFIG.debugLogPath == ""
 PASS  DEFAULT_CONFIG.enabled == true
 PASS  DEFAULT_CONFIG.endSequenceRepeats == 2
+PASS  DEFAULT_CONFIG.forkBrief == true
+PASS  DEFAULT_CONFIG.forkBriefNote == ""
 PASS  DEFAULT_CONFIG.lang == "zh"
 PASS  DEFAULT_CONFIG.maxChars == 20000
 PASS  DEFAULT_CONFIG.maxCorrectionsPerTurn == 1
@@ -43,12 +45,14 @@ PASS  INTERFACE §配置 documents config key "debugLog"
 PASS  INTERFACE §配置 documents config key "debugLogPath"
 PASS  INTERFACE §配置 documents config key "enabled"
 PASS  INTERFACE §配置 documents config key "endSequenceRepeats"
+PASS  INTERFACE §配置 documents config key "forkBrief"
+PASS  INTERFACE §配置 documents config key "forkBriefNote"
 PASS  INTERFACE §配置 documents config key "lang"
 PASS  INTERFACE §配置 documents config key "maxChars"
 PASS  INTERFACE §配置 documents config key "maxCorrectionsPerTurn"
 PASS  INTERFACE §配置 documents config key "maxLines"
 PASS  INTERFACE §配置 documents config key "noopCheck"
-NOTE  R10 documented :: docs/INTERFACE.md documents all 12 config keys (D-5 resolved by the 2026-10-29 R10 ruling)
+NOTE  config keys documented :: docs/INTERFACE.md documents all 14 config keys
 
 == 2. mergeConfig / ruling R3 ==
 PASS  mergeConfig(no args) does not throw
@@ -93,6 +97,12 @@ PASS  R12: non-boolean contextGuard falls back to false
 PASS  R12: non-empty contextGuardNote is honored
 PASS  R12: empty/non-string contextGuardNote falls back to ""
 PASS  R12: contextGuard settings do not leak into other defaults
+PASS  R16: DEFAULT_CONFIG.forkBrief defaults to true
+PASS  R16: mergeConfig({forkBrief:false}) -> false
+PASS  R16: non-boolean forkBrief falls back to true
+PASS  R16: non-empty forkBriefNote is honored
+PASS  R16: empty/non-string forkBriefNote falls back to ""
+PASS  R16: forkBrief settings do not leak into other defaults
 PASS  mergeConfig fallback: NaN
 PASS  mergeConfig fallback: Infinity
 PASS  mergeConfig fallback: -1
@@ -221,6 +231,51 @@ PASS  D-10 zero-drift on fixture: ok-short-text-few-tags.txt
 PASS  D-10 zero-drift on fixture: ok-single-end-sequence.txt
 PASS  R14: evidence.length / closingTagCount are measured on the original text
 PASS  R14: sanitizeMessages inherits namespace tolerance (prefixed damage is rewritten)
+
+== 5c. D-11/R15: fabricated tool-result markup (assistant scope only) ==
+PASS  scanAssistantText(fabricated tool-result) does not throw
+PASS  D-11: fabricated <tool-result> payload => damaged
+PASS  D-11: reports MARKUP_LEAKED_AS_TEXT (existing code, set unchanged)
+PASS  D-11: result-specific detail is emitted (not the prose-leak detail)
+PASS  scanAssistantText(underscore <tool_result>) does not throw
+PASS  D-11 variants: underscore <tool_result> => damaged
+PASS  scanAssistantText(squashed <toolresult>) does not throw
+PASS  D-11 variants: squashed <toolresult> => damaged
+PASS  scanAssistantText(namespace-prefixed <antml:tool-result>) does not throw
+PASS  D-11 variants: namespace-prefixed <antml:tool-result> => damaged
+PASS  scanAssistantText(guardrail: plain "tool_result" word) does not throw
+PASS  D-11 guardrail: plain "tool_result" word is NOT damaged
+PASS  scanAssistantText(guardrail: plain "tool-result" word) does not throw
+PASS  D-11 guardrail: plain "tool-result" word is NOT damaged
+PASS  scanAssistantText(guardrail: plain "toolresult" word) does not throw
+PASS  D-11 guardrail: plain "toolresult" word is NOT damaged
+PASS  scanAssistantText(guardrail: closing tag only) does not throw
+PASS  D-11 guardrail: closing tag only is NOT damaged
+PASS  scanAssistantText(guardrail: near-miss <tool-resultx>) does not throw
+PASS  D-11 guardrail: near-miss <tool-resultx> is NOT damaged
+PASS  D-11 containment: damaged === true regardless of tool calls
+PASS  D-11 containment: hasToolCalls:true => silentFailure FALSE
+PASS  D-11 containment: hasToolCalls:false => silentFailure true
+PASS  D-11 containment: meta does not change findings
+PASS  D-11 containment: a result-marked message that ALSO carries a tool-call is not silent
+PASS  scanToolArguments(small result marker leaf) does not throw
+PASS  D-11 scope: small result marker leaf => NOT deny
+PASS  D-11 scope: small result marker leaf => no MARKUP_LEAKED_AS_TEXT on a leaf
+PASS  scanToolArguments(large result marker leaf (deny-volume eligible)) does not throw
+PASS  D-11 scope: large result marker leaf (deny-volume eligible) => NOT deny
+PASS  D-11 scope: large result marker leaf (deny-volume eligible) => no MARKUP_LEAKED_AS_TEXT on a leaf
+PASS  scanToolArguments(doc quoting result tags (>=2000 chars)) does not throw
+PASS  D-11 scope: doc quoting result tags (>=2000 chars) => NOT deny
+PASS  D-11 scope: doc quoting result tags (>=2000 chars) => no MARKUP_LEAKED_AS_TEXT on a leaf
+PASS  D-11 zero-drift on fixture: v1-end-multiplied.txt
+PASS  D-11 zero-drift on fixture: v2-missing-opening.txt
+PASS  D-11 zero-drift on fixture: v3-leaked-markup.txt
+PASS  D-11 zero-drift on fixture: ok-normal-html.txt
+PASS  D-11 zero-drift on fixture: ok-normal-js.txt
+PASS  D-11 zero-drift on fixture: ok-normal-markdown-table.txt
+PASS  D-11 zero-drift on fixture: ok-short-text-few-tags.txt
+PASS  D-11 zero-drift on fixture: ok-single-end-sequence.txt
+PASS  D-11 delta: the fabricated-result payload was INVISIBLE pre-D-11
 
 == 6. scanToolArguments: shape, deny gate (lead-reported false positive) ==
   sizes: damagedBig=1170ch, okBigHtml=5890ch, shortQuotingProtocol=34ch
@@ -543,14 +598,14 @@ NOTE  FindingCode coverage :: produced=CLOSING_TAG_DENSITY,END_SEQUENCE_MULTIPLI
 PASS  5MB plain text: no throw, <5000ms
 PASS  5MB plain text: length reported
 PASS  5MB of closing tags: no throw, <5000ms
-  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=17.5
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=19.0
 PASS  ~2.6MB call markup via args: no throw, <5000ms
-  call-markup args: action=deny ms=22.2 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+  call-markup args: action=deny ms=27.2 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
 PASS  pathological < / > flood: no throw, <5000ms
 PASS  pathological flood via args: no throw, <5000ms
 
 == SUMMARY ==
-PASS=480  FAIL=0  NOTES=4  DEFECTS=0
+PASS=533  FAIL=0  NOTES=4  DEFECTS=0
 
 --- raw snapshot ---
 frozenCodesProduced=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","INTERNAL_ERROR","MARKUP_LEAKED_AS_TEXT","MISSING_OPENING_MARKUP","PAYLOAD_TOO_LONG","SUSPICIOUS_NOOP_RESULT","TRUNCATED_PAYLOAD","UNPAIRED_CLOSING_TAG"]

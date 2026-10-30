@@ -72,6 +72,7 @@ const CORE_EVENTS = [
   'tools/post-execute',
   'session/event',
   'agent/turn-stopping',
+  'agent/pre-step', // R16 / M7 fork brief
 ];
 const OPTIONAL_EVENTS = ['llm/stream'];
 const ALLOWED_EVENTS = [...CORE_EVENTS, ...OPTIONAL_EVENTS];
@@ -425,6 +426,25 @@ function m4Ctx(config) {
   check('M4: damaged text WITH tool calls => no inject (R1 hasToolCalls)', m.stop('s3', 1).length === 0);
 }
 {
+  /* D-11 / R15 containment at the real seam: a fabricated tool-result marker is
+   * damage (so a call-free step self-heals), but a step that DID make a call is
+   * never treated as a silent no-op. */
+  const resultPayload = LT + 'tool-result>v24.12.0 dirs ok' + LT + SL + 'tool-result' + GT;
+  const lonely = m4Ctx({ maxCorrectionsPerTurn: 2 });
+  const lonelyId = 'd11-lonely';
+  lonely.onAssistant(lonelyId, 1, { role: 'assistant', content: [{ type: 'text', text: resultPayload }] });
+  check('D-11 containment (M4): result-marked text with NO tool call => injects (silent failure)',
+    lonely.stop(lonelyId, 1).length === 1);
+  const withCall = m4Ctx({ maxCorrectionsPerTurn: 2 });
+  const withCallId = 'd11-with-call';
+  withCall.onAssistant(withCallId, 1, {
+    role: 'assistant',
+    content: [{ type: 'text', text: resultPayload }, { type: 'tool-call', id: 't', name: 'run_code', arguments: '{}' }],
+  });
+  check('D-11 containment (M4): result-marked text WITH a tool call => NO inject',
+    withCall.stop(withCallId, 1).length === 0);
+}
+{
   const m = m4Ctx({ maxCorrectionsPerTurn: 1 });
   m.onAssistant('s4', 1, { role: 'assistant', content: [{ type: 'text', text: v1Text }] });
   check('M4: first stop injects', m.stop('s4', 1).length === 1);
@@ -658,6 +678,134 @@ section('6b. M5/R12 wiring status + (if wired) llm/stream behaviour');
         'implementation ("现行行为（已按此实现）") and must mark the seam as not wired / disabled; ' +
         'plugin/index.js registers no llm/stream listener (wiring removed by user decision).');
     }
+  }
+}
+
+section('6c. R16/M7 fork brief (agent/pre-step)');
+{
+  const runPreStep = async (cfg, agent, decision) => {
+    const { ctx, handlers } = mockCtx();
+    mod.apply(ctx, cfg);
+    const fn = handlers.get('agent/pre-step');
+    let nextCalls = 0;
+    let ret = null;
+    try {
+      ret = await fn({ agent, turn: 1, step: 1 }, async () => { nextCalls += 1; return decision; });
+    } catch (e) {
+      ret = { threw: String((e && e.message) || e) };
+    }
+    return { registered: typeof fn === 'function', nextCalls, ret };
+  };
+  const msgsOf = (ret) => (ret && Array.isArray(ret.messages) ? ret.messages : []);
+  const enter = {
+    kind: 'enter',
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'go' }] }],
+    startsRequestSeries: true,
+  };
+  /* Two access shapes: the DOCUMENTED one (session.header) and the one the
+   * implementation happens to read (session.events + a "session" event). */
+  const byHeader = (id, fields) => ({ id, session: { header: fields } });
+  const byEvents = (id, fields) => ({ id, session: { events: [{ type: 'session', ...fields }] } });
+
+  /* (a) REAL path: the documented way to detect a fork is agent.session.header. */
+  {
+    const { registered, nextCalls, ret } = await runPreStep(
+      {}, byHeader('fork-1', { parentSession: 'parent-9', isSeeded: true }), enter);
+    check('R16: agent/pre-step listener is registered', registered);
+    check('R16: next() called exactly once', nextCalls === 1, 'nextCalls=' + nextCalls);
+    const msgs = msgsOf(ret);
+    check('R16 (documented agent.session.header): a forked session gets a brief prepended',
+      msgs.length === 2, 'messages=' + msgs.length + ' (expected 2)');
+    if (msgs.length !== 2) {
+      defect('D-12', 'high',
+        'M7/R16 cannot fire against the documented harness interface: forkHeadline() reads ' +
+        '`agent.session.events` and looks for an event of type "session", but Session exposes ' +
+        '`header: SessionHeader` and has no `events` member ' +
+        '(dsh-session-reference/lib/typert.host.js:557 declaration), and known-event-types.js has ' +
+        'no bare "session" event type. So it returns null for every real session and the fork brief ' +
+        'is a silent no-op (the exact failure class this project exists to remove). Fix: read ' +
+        '`agent.session.header` -> { parentSession?, isSeeded }.');
+    }
+  }
+  /* (b) The INVENTED shape works — this isolates the cause to the API mismatch. */
+  {
+    const { ret } = await runPreStep({}, byEvents('fork-events', { parentSession: 'p', isSeeded: true }), enter);
+    const msgs = msgsOf(ret);
+    check('R16: with the INVENTED session.events shape the branch does fire (cause isolation)',
+      msgs.length === 2, 'messages=' + msgs.length);
+    check('R16: brief is prepended before the inherited messages', msgs.length === 2 && msgs[1] === enter.messages[0]);
+    check('R16: decision fields survive the spread (kind + startsRequestSeries)',
+      ret && ret.kind === 'enter' && ret.startsRequestSeries === true);
+    check('R16: brief is a user message with an admitted source kind',
+      msgs[0] && msgs[0].role === 'user' && isAdmittedKind(msgs[0].source && msgs[0].source.kind),
+      JSON.stringify(msgs[0] && msgs[0].source));
+    check('R16: brief carries no payload canary', msgs[0] && !JSON.stringify(msgs[0]).includes('CANARY'));
+    /* The house rule forbids COMPLETE literal closing tags (e.g. "</invoke>");
+     * the bare two-character "</" prefix is explicitly the sanctioned way to
+     * talk about them (docs/PROMPTS.md §写作原则). */
+    check('R16: the built-in brief contains no COMPLETE literal closing tag',
+      msgs[0] && !/<\/[A-Za-z][A-Za-z0-9:_-]*>/.test(msgs[0].content[0].text),
+      JSON.stringify(msgs[0] && msgs[0].content[0].text));
+  }
+  /* (c) Non-fork sessions must not be briefed. */
+  for (const [label, agent] of [
+    ['header: isSeeded false', byHeader('p1', { isSeeded: false })],
+    ['header: empty header', byHeader('p2', {})],
+    ['events: no session event', byEvents('p3', {})],
+  ]) {
+    const { ret } = await runPreStep({}, agent, enter);
+    check('R16: ' + label + ' => no brief', msgsOf(ret).length === 1, 'messages=' + msgsOf(ret).length);
+  }
+  /* (d) Kill switch + once-per-session bound. */
+  {
+    const { ret } = await runPreStep({ forkBrief: false }, byEvents('f-off', { isSeeded: true }), enter);
+    check('R16: forkBrief:false => no brief', msgsOf(ret).length === 1);
+  }
+  {
+    const { ctx, handlers } = mockCtx();
+    mod.apply(ctx, {});
+    const fn = handlers.get('agent/pre-step');
+    const agent = byEvents('f-once', { isSeeded: true });
+    const call = () => fn({ agent, turn: 1, step: 1 }, async () => ({ kind: 'enter', messages: [] }));
+    await call();
+    const second = await call();
+    check('R16: briefed at most once per session (second step gets none)',
+      second && Array.isArray(second.messages) && second.messages.length === 0,
+      JSON.stringify(second && second.messages && second.messages.length));
+  }
+  /* (e) Never takes over a decision; custom note; localization. */
+  {
+    const { ret, nextCalls } = await runPreStep({}, byEvents('f-reject', { isSeeded: true }), { kind: 'reject', reason: 'nope' });
+    check('R16: a downstream reject passes through unchanged',
+      ret && ret.kind === 'reject' && ret.reason === 'nope' && nextCalls === 1,
+      JSON.stringify(ret));
+  }
+  {
+    const { ret } = await runPreStep({ forkBriefNote: 'BRIEF-TEXT' }, byEvents('f-note', { isSeeded: true }), enter);
+    const msgs = msgsOf(ret);
+    check('R16: forkBriefNote overrides the built-in text verbatim',
+      msgs.length === 2 && msgs[0].content[0].text === 'BRIEF-TEXT',
+      JSON.stringify(msgs[0] && msgs[0].content[0].text));
+  }
+  {
+    const zh = await runPreStep({}, byEvents('f-zh', { isSeeded: true }), enter);
+    const en = await runPreStep({ lang: 'en' }, byEvents('f-en', { isSeeded: true }), enter);
+    const zhMsgs = msgsOf(zh.ret);
+    const enMsgs = msgsOf(en.ret);
+    const zhText = zhMsgs.length === 2 ? zhMsgs[0].content[0].text : '';
+    const enText = enMsgs.length === 2 ? enMsgs[0].content[0].text : '';
+    check('R16: built-in brief is localized (zh != en)', zhText !== enText && zhText.length > 0,
+      JSON.stringify([zhText.slice(0, 24), enText.slice(0, 24)]));
+  }
+  /* (f) Malformed agent/payload never throws and never blocks. */
+  for (const [label, agent] of [
+    ['undefined agent', undefined],
+    ['agent without session', { id: 'x' }],
+    ['session null', { id: 'x', session: null }],
+  ]) {
+    const { ret, nextCalls } = await runPreStep({}, agent, enter);
+    check('R16 malformed(' + label + '): next() once, decision unchanged',
+      nextCalls === 1 && ret && ret.kind === 'enter', 'nextCalls=' + nextCalls + ' ret=' + JSON.stringify(ret));
   }
 }
 
