@@ -38,6 +38,30 @@ const END_PARAM_RE = new RegExp(LT + SLASH + 'parameter[ \\t\\r\\n]*' + GT, 'g')
 const HEAD_INVOKE_RE = new RegExp('^' + LT + 'invoke(?![A-Za-z0-9:_-])');
 const HEAD_PARAM_RE = new RegExp('^' + LT + 'parameter(?![A-Za-z0-9:_-])');
 
+/**
+ * D-10 (2026-10-30): the leaked envelope is not always written with bare tag
+ * names. A real failure used the Anthropic-style namespace — `LT` + `antml:invoke`,
+ * `LT` + `SLASH` + `antml:parameter`, ... — and none of those contain a bare
+ * `LT` + `invoke` / `LT` + `parameter` substring. Every structural rule therefore
+ * missed it silently and M4 never fired.
+ *
+ * Instead of teaching each rule about prefixes (and risking the pairing/offset
+ * logic that took several defects to get right), strip an optional namespace
+ * prefix in a *shadow copy* used only for structural analysis. Text without a
+ * colon is returned as the identical string, so existing behaviour cannot drift.
+ * The trailing `(?!SLASH)` keeps URLs such as `LT` + `http://...` out of it.
+ */
+const NAMESPACE_PREFIX_RE = /<(\/?)([A-Za-z_][A-Za-z0-9_.-]*):(?!\/)/g;
+
+function normalizeNamespaces(text) {
+  if (typeof text !== 'string' || text.indexOf(':') === -1) return text;
+  try {
+    return text.replace(NAMESPACE_PREFIX_RE, '<$1');
+  } catch {
+    return text;
+  }
+}
+
 const CJK_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 const CJK_PUNCT_RE = /[\u3000-\u303f\uff01-\uff5e]/;
 
@@ -586,11 +610,14 @@ export function scanAssistantText(text, opts, meta) {
   try {
     const findings = [];
 
+    // D-10: structural analysis runs on a namespace-stripped shadow copy. When
+    // the text contains no colon this is the identical string, so nothing drifts.
+    const structural = normalizeNamespaces(source);
     const closingTagCount = countOccurrences(source, CLOSE_PREFIX);
-    const run = trailingEndRun(source);
+    const run = trailingEndRun(structural);
     const endSequenceRepeats = run.count;
-    const invokeOpenAt = firstIndexOf(source, OPEN_INVOKE_RE);
-    const paramOpenAt = firstIndexOf(source, OPEN_PARAM_RE);
+    const invokeOpenAt = firstIndexOf(structural, OPEN_INVOKE_RE);
+    const paramOpenAt = firstIndexOf(structural, OPEN_PARAM_RE);
     const hasInvokeOpen = invokeOpenAt !== -1;
     const hasParamOpen = paramOpenAt !== -1;
 
@@ -634,7 +661,7 @@ export function scanAssistantText(text, opts, meta) {
     }
 
     // TRUNCATED_PAYLOAD — the call/parameter structure never closed.
-    const truncated = detectTruncatedText(source);
+    const truncated = detectTruncatedText(structural);
     if (truncated) {
       findings.push({
         code: 'TRUNCATED_PAYLOAD',
@@ -644,7 +671,7 @@ export function scanAssistantText(text, opts, meta) {
     }
 
     // UNPAIRED_CLOSING_TAG — more closers than openers for one structural tag.
-    findings.push(...unpairedFindings(source, 'warn'));
+    findings.push(...unpairedFindings(structural, 'warn'));
 
     const damaged = hasBlocking(findings);
 
@@ -709,6 +736,9 @@ export function scanToolArguments(name, args, opts) {
       const lines = countLines(value);
       const chars = value.length;
       const closing = countOccurrences(value, CLOSE_PREFIX);
+      // D-10: structural checks run on a namespace-stripped shadow copy; the
+      // line/char counting above intentionally stays on the raw value.
+      const structural = normalizeNamespaces(value);
 
       // R4 volume gate — only a payload of real size may be denied.
       const eligible = chars >= gate.minChars || lines >= gate.minLines;
@@ -749,7 +779,7 @@ export function scanToolArguments(name, args, opts) {
         });
       }
 
-      const run = trailingEndRun(value);
+      const run = trailingEndRun(structural);
       const multiplied = run.count >= config.endSequenceRepeats;
       if (multiplied) {
         leafFindings.push({
@@ -768,9 +798,9 @@ export function scanToolArguments(name, args, opts) {
 
       // R4: on an argument leaf this is evidence only — a legitimate document
       // naturally has closing tags whose openers are absent.
-      leafFindings.push(...unpairedFindings(value, 'info'));
+      leafFindings.push(...unpairedFindings(structural, 'info'));
 
-      const truncated = detectTruncatedText(value);
+      const truncated = detectTruncatedText(structural);
       if (truncated) {
         leafFindings.push({
           code: 'TRUNCATED_PAYLOAD',
