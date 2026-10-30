@@ -2,6 +2,10 @@
 
 [简体中文](README.md) | **English**
 
+> Package `@irwdone/dsh-structured-output-guard` (same name as the GitHub repo) | current version **0.2.0**.
+> **How to tell the local plugin really updated**: read this bundle's version in the Plugin Manager, or look at
+> `node_modules/@irwdone/dsh-structured-output-guard/package.json` in the profile.
+
 A **DSH (DeepSeek Harness) Host plugin** that turns **silent** tool-call failures into **explicit, recoverable** ones.
 
 It detects damaged tool-call arguments, blocks the broken call with an actionable reason, and — when a turn would otherwise close silently — makes the model retry **inside the same turn**.
@@ -21,6 +25,8 @@ When a model writes a very large tool-call argument — especially when the payl
 The leaked markup also comes in **more than one dialect**: bare tags (`<invoke` / `<parameter`) *and* **namespace-prefixed** ones (e.g. `<antml:invoke>` / `<antml:parameter>`). The prefixed form once made the detector miss a real failure **entirely** — `<antml:parameter` contains no `<parameter` substring. That is defect **D-10**, now fixed (see §7.4).
 
 A worse variant is the **fabricated tool result**: the text contains a tool-result-shaped block while that step made **no tool call at all** — the model reports a result it never obtained (down to a specific version number). That is a **false fact**, worse than a silent no-op. Defect **D-11**, now fixed (see §7.4).
+
+The cleanest variant of all is the **bare envelope**: the message *is* a **complete, balanced** call envelope with **no prose whatsoever** (that step's `toolCallCount === 0`). It slipped past every rule — no prose, so the prose rule stays quiet; balanced structure, so truncation and unpaired-closer checks stay quiet — leaving `damaged=false`, no M4, and a silently closed turn. Defect **D-13**, now fixed (see §7.4).
 
 All three fail **silently**: nothing executes, nothing errors, and the turn closes as though the work had been done.
 
@@ -167,7 +173,7 @@ Verification is split deliberately: "the code does what the contract says" is pr
 
 ### 7.3 Docs and evidence
 
-- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R16), including the ones changed after evidence contradicted them.
+- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R17), including the ones changed after evidence contradicted them.
 - `docs/CONTRACTS.md` — the pre-implementation contract dig; every claim carries a file path and line number.
 - `docs/DESIGN.md` — failure taxonomy, trigger conditions, mechanism design, and the corrections made after measurement.
 - `docs/PROMPTS.md` — the prevention/correction/denial texts, kept even though the plugin no longer injects any prompt (available for manual use).
@@ -185,6 +191,7 @@ Listed because they are the useful part: two of them were only findable by readi
 | `D-10` | high | The detector only knew **bare** tags, so it could not see the **namespace-prefixed** form that a real failure used (`<antml:invoke>` / `<antml:parameter>`) ⇒ `damaged=false` ⇒ M4 never fired and the turn closed silently. Fixed (R14: structural analysis runs on a namespace-stripped shadow copy; text without a colon is returned as the identical string, so nothing drifts). **Corpus-level check (an invariant, not a snapshot)**: running every real session's text through the pre- and post-fix detector changes the verdict for exactly **1** message — the very fork the user hit. Absolute totals keep growing because the log is append-only (verification itself writes into it), so they are not a baseline |
 | `D-11` | high | **Fabricated tool result**: a step with `toolCallCount === 0` whose text was a `tool_result`-shaped block around a version string (observed in a real session) — the model reported a result it **never obtained**, i.e. a **false fact**. Fixed (R15: result-shaped markup in assistant prose reports `MARKUP_LEAKED_AS_TEXT`; the existing code is reused, `meta` is not consulted, and no natural-language sentence is required; when the step *did* make tool calls, `silentFailure` stays false so R1 blocks the injection) |
 | `D-12` | high | **M7 read an API that does not exist**: the first version read `agent.session.events` looking for a `type === 'session'` entry, but `Session` has no `events` and no such event (the fork marker lives on `session.header`) ⇒ the function always returned null ⇒ **M7 was a silent no-op**. Caught by independent verification with three independent proofs (interface declaration, implementation, runtime event catalog). Fixed by reading `session.header`. **Same failure class as D-8/M5: a plausible-looking API that is not there, then silently doing nothing** |
+| `D-13` | high | **Bare-envelope miss**: a step with `toolCallCount === 0` whose message was a **complete, balanced, prose-free** call envelope (325 chars, observed live) **slipped past every existing rule** (the prose rule needs a natural-language sentence; a balanced structure defeats the truncation and unpaired-closer checks) ⇒ `damaged=false`, M4 never fired, the turn closed silently. Fixed (R17: after normalisation, if `trimStart()` **starts with a call opening marker** it reports `MARKUP_LEAKED_AS_TEXT` — no prose and no structural damage required; code-fenced quotes and prose explanations stay clean). The negative fixture `ok-single-end-sequence.txt` was reclassified to a **quoted** form (its old content *was* a bare envelope) and the assertions were only **added to**, never weakened |
 | `D-5 / D-6 / D-7 / D-9` | low | Contract drift, a hardcoded local path in a default, a diagnostic switch left on in the shipped patch, and a self-contradictory doc paragraph. All fixed |
 
 ## 8. Limitations

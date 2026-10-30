@@ -598,9 +598,9 @@ NOTE  FindingCode coverage :: produced=CLOSING_TAG_DENSITY,END_SEQUENCE_MULTIPLI
 PASS  5MB plain text: no throw, <5000ms
 PASS  5MB plain text: length reported
 PASS  5MB of closing tags: no throw, <5000ms
-  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=19.0
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=19.7
 PASS  ~2.6MB call markup via args: no throw, <5000ms
-  call-markup args: action=deny ms=27.2 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+  call-markup args: action=deny ms=23.0 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
 PASS  pathological < / > flood: no throw, <5000ms
 PASS  pathological flood via args: no throw, <5000ms
 

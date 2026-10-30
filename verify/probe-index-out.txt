@@ -80,7 +80,7 @@ PASS  R9/M3: text respects lang=en
 
 == 6. M4 seam: session/event -> agent/turn-stopping -> agent.inject ==
 PASS  M4: damaged assistant text (no tool-call) => one inject()
-  injected message = {"id":"8f6f3e15-ce46-4147-84ca-a8c3c98ae772","role":"user","content":[{"type":"text","text":"【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，直接用更小的分块重新发起那个调用。\n\n[结构校验失败 · 自动纠正]\n\n上一步的 assistant 输出被判为工具调用结构损坏（检测到未配对的调用标记、重复的结束序列，\n或调用标记泄漏为正文）。该步未执行任何操作——不要假设它已成功，也不要引用它的结果。\n\n现在请重新执行同一步骤，并遵守：\n1. 把 payload 拆到每块 ≤ 100 行：首块用 write，其余用追加。\n2. 参数里不要出现完整的字面闭合标签，用拼接构造。\n3. 每块落盘后用一次独立的小调用回读校验。\n4. 不要复述、不要重新输出上一段损坏内容——直接给出新的、更小的调用。"}],"source":{"kind":"runtime-context"}}
+  injected message = {"id":"29616117-2282-46c1-80b5-d66afeaf339c","role":"user","content":[{"type":"text","text":"【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，直接用更小的分块重新发起那个调用。\n\n[结构校验失败 · 自动纠正]\n\n上一步的 assistant 输出被判为工具调用结构损坏（检测到未配对的调用标记、重复的结束序列，\n或调用标记泄漏为正文）。该步未执行任何操作——不要假设它已成功，也不要引用它的结果。\n\n现在请重新执行同一步骤，并遵守：\n1. 把 payload 拆到每块 ≤ 100 行：首块用 write，其余用追加。\n2. 参数里不要出现完整的字面闭合标签，用拼接构造。\n3. 每块落盘后用一次独立的小调用回读校验。\n4. 不要复述、不要重新输出上一段损坏内容——直接给出新的、更小的调用。"}],"source":{"kind":"runtime-context"}}
 PASS  M4: injected message is a user message with a text block
 PASS  M4: injected text is the correction prompt, not the payload
 PASS  M4: injected message source.kind is an admitted v4 producer kind
@@ -129,10 +129,11 @@ PASS  M5-withdrawn: INTERFACE does not claim an implemented llm/stream listener
 PASS  R16: agent/pre-step listener is registered
 PASS  R16: next() called exactly once
 PASS  R16 (documented agent.session.header): a forked session gets a brief prepended
-FAIL  R16: with the INVENTED session.events shape the branch does fire (cause isolation)  :: messages=1
-FAIL  R16: brief is prepended before the inherited messages
+PASS  D-12 regression: an agent with ONLY session.events is NOT briefed
+PASS  D-12 regression (static): index.js code reads session.header, never session.events
+PASS  R16: brief is prepended before the inherited messages
 PASS  R16: decision fields survive the spread (kind + startsRequestSeries)
-FAIL  R16: brief is a user message with an admitted source kind
+PASS  R16: brief is a user message with an admitted source kind
 PASS  R16: brief carries no payload canary
 PASS  R16: the built-in brief contains no COMPLETE literal closing tag
 PASS  R16: header: isSeeded false => no brief
@@ -141,11 +142,13 @@ PASS  R16: events: no session event => no brief
 PASS  R16: forkBrief:false => no brief
 PASS  R16: briefed at most once per session (second step gets none)
 PASS  R16: a downstream reject passes through unchanged
-FAIL  R16: forkBriefNote overrides the built-in text verbatim  :: "go"
-FAIL  R16: built-in brief is localized (zh != en)  :: ["",""]
+PASS  R16: forkBriefNote overrides the built-in text verbatim
+PASS  R16: built-in brief is localized (zh != en)
 PASS  R16 malformed(undefined agent): next() once, decision unchanged
 PASS  R16 malformed(agent without session): next() once, decision unchanged
 PASS  R16 malformed(session null): next() once, decision unchanged
+PASS  R16 exception(throwing session getter): next() once, original decision returned, no throw
+PASS  R16 exception(throwing header getter): next() once, original decision returned, no throw
 
 == 7. no payload text hardcoded / leaked into messages ==
 PASS  M1-removed: no prompt section is registered, so no prompt text can leak
@@ -158,11 +161,4 @@ PASS  index.js source is non-empty and exports apply
 PASS  index.js has no top-level await import side effects (loads cleanly)
 
 == SUMMARY ==
-PASS=120  FAIL=5  NOTES=2  DEFECTS=0
-
---- failed checks ---
-  * R16: with the INVENTED session.events shape the branch does fire (cause isolation)  :: messages=1
-  * R16: brief is prepended before the inherited messages
-  * R16: brief is a user message with an admitted source kind
-  * R16: forkBriefNote overrides the built-in text verbatim  :: "go"
-  * R16: built-in brief is localized (zh != en)  :: ["",""]
+PASS=128  FAIL=0  NOTES=2  DEFECTS=0

@@ -2,7 +2,7 @@
 # overrides an existing row by id and is a silent no-op for a new one.
 - insert:
     - id: structured-output-guard
-      name: '@local/structured-output-guard'
+      name: '@irwdone/dsh-structured-output-guard'
       config:
         enabled: true
         maxLines: 100

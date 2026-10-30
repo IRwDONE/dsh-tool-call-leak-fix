@@ -1774,6 +1774,48 @@ async function main() {
     }
   });
 
+  /* ------------------------------------------------------------------ */
+  /* S. D-13 / R17 — a bare envelope as assistant prose                  */
+  /* Live case: a complete, *balanced* 325-char envelope with no prose   */
+  /* passed every rule, so M4 never fired and the turn closed silently.  */
+  /* ------------------------------------------------------------------ */
+  section('S. D-13 裸信封即泄漏（R17）：完整配平、无散文的调用信封出现在正文里');
+
+  check('S1[D-13] 完整配平、无散文的信封 → damaged + silentFailure', () => {
+    const LQ = '<';
+    const T = (name) => LQ + name + '>';
+    const envelope =
+      '\n\n' +
+      T('antml:invoke name="run_code"') + '\n' +
+      T('antml:parameter name="code"') + 'const a = 1;' + T('/antml:parameter') + '\n' +
+      T('antml:parameter name="description"') + 'minimal check' + T('/antml:parameter') + '\n' +
+      T('/antml:invoke');
+    const r = scanAssistantText(envelope, {}, { hasToolCalls: false, toolCallCount: 0 });
+    eq(r.damaged, true, 'damaged');
+    eq(r.silentFailure, true, 'silentFailure');
+    ok(hasCode(r, 'MARKUP_LEAKED_AS_TEXT'), '应命中 MARKUP_LEAKED_AS_TEXT');
+  });
+
+  check('S2[D-13 护栏] 同一个信封放在代码块里（引用形式）→ 不得判 damaged', () => {
+    const LQ = '<';
+    const T = (name) => LQ + name + '>';
+    const quoted =
+      '```\n' +
+      T('invoke name="write"') + '\n' +
+      T('parameter name="path"') + 'assets/app.js' + T('/parameter') + '\n' +
+      T('parameter name="content"') + 'export const sum = (a, b) => a + b;' + T('/parameter') + '\n' +
+      T('/invoke') + '\n' +
+      '```\n';
+    const r = scanAssistantText(quoted, {}, { hasToolCalls: false });
+    eq(r.damaged, false, '代码块内的引用不得判 damaged');
+  });
+
+  check('S3[D-13 一致性] ok-single-end-sequence.txt（引用形式）仍不得判 damaged', () => {
+    const text = fixture('ok-single-end-sequence.txt');
+    const r = scanAssistantText(text, {}, { hasToolCalls: false });
+    eq(r.damaged, false, 'fixture 应仍为负例（该形状只有在裸用时才是泄漏）');
+  });
+
   return 0;
 }
 

@@ -680,6 +680,22 @@ export function scanAssistantText(text, opts, meta) {
       }
     }
 
+    // D-13 (2026-10-31): call markup that *starts* an assistant text message is a
+    // leaked call attempt — prose or not, balanced or not. Observed live: a
+    // complete, balanced 325-character envelope with no prose at all passed every
+    // other rule (`leakedMarkup: false`, `truncated: false`, no unpaired closers),
+    // so M4 never fired and the turn closed silently. A model that merely *quotes*
+    // the format starts with prose or a code fence, never with the opening marker.
+    const headText = structural.trimStart();
+    if (!leakedMarkup && (HEAD_INVOKE_RE.test(headText) || HEAD_PARAM_RE.test(headText))) {
+      findings.push({
+        code: 'MARKUP_LEAKED_AS_TEXT',
+        severity: 'error',
+        detail: 'call markup starts an assistant text message (the call was never dispatched)',
+        at: structural.length - headText.length,
+      });
+    }
+
     // D-11: tool-result-shaped markup in assistant prose. Deliberately NOT gated
     // on `meta.hasToolCalls` (R1: meta only decides `silentFailure`) and
     // deliberately not requiring a natural-language sentence — the observed

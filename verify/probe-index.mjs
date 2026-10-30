@@ -727,13 +727,23 @@ section('6c. R16/M7 fork brief (agent/pre-step)');
         '`agent.session.header` -> { parentSession?, isSeeded }.');
     }
   }
-  /* (b) The INVENTED shape works — this isolates the cause to the API mismatch. */
+  /* (b) D-12 regression lock: the fork marker must come from the DOCUMENTED
+   * `session.header`. An agent carrying only the (nonexistent) `session.events`
+   * shape must NOT be briefed, and the source must not read `.events` at all. */
   {
-    const { ret } = await runPreStep({}, byEvents('fork-events', { parentSession: 'p', isSeeded: true }), enter);
+    const { ret } = await runPreStep({}, byEvents('fork-bogus', { parentSession: 'p', isSeeded: true }), enter);
+    check('D-12 regression: an agent with ONLY session.events is NOT briefed',
+      msgsOf(ret).length === 1, 'messages=' + msgsOf(ret).length);
+    const code = idxSrc.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/gm, '$1 ');
+    check('D-12 regression (static): index.js code reads session.header, never session.events',
+      /session\.header/.test(code) && !/session\.events/.test(code));
+  }
+  /* (b2) Behaviour of the documented path: prepend + spread + source + text hygiene. */
+  {
+    const { ret } = await runPreStep({}, byHeader('fork-2', { parentSession: 'p', isSeeded: true }), enter);
     const msgs = msgsOf(ret);
-    check('R16: with the INVENTED session.events shape the branch does fire (cause isolation)',
-      msgs.length === 2, 'messages=' + msgs.length);
-    check('R16: brief is prepended before the inherited messages', msgs.length === 2 && msgs[1] === enter.messages[0]);
+    check('R16: brief is prepended before the inherited messages',
+      msgs.length === 2 && msgs[1] === enter.messages[0], 'messages=' + msgs.length);
     check('R16: decision fields survive the spread (kind + startsRequestSeries)',
       ret && ret.kind === 'enter' && ret.startsRequestSeries === true);
     check('R16: brief is a user message with an admitted source kind',
@@ -758,14 +768,14 @@ section('6c. R16/M7 fork brief (agent/pre-step)');
   }
   /* (d) Kill switch + once-per-session bound. */
   {
-    const { ret } = await runPreStep({ forkBrief: false }, byEvents('f-off', { isSeeded: true }), enter);
+    const { ret } = await runPreStep({ forkBrief: false }, byHeader('f-off', { isSeeded: true }), enter);
     check('R16: forkBrief:false => no brief', msgsOf(ret).length === 1);
   }
   {
     const { ctx, handlers } = mockCtx();
     mod.apply(ctx, {});
     const fn = handlers.get('agent/pre-step');
-    const agent = byEvents('f-once', { isSeeded: true });
+    const agent = byHeader('f-once', { isSeeded: true });
     const call = () => fn({ agent, turn: 1, step: 1 }, async () => ({ kind: 'enter', messages: [] }));
     await call();
     const second = await call();
@@ -775,21 +785,21 @@ section('6c. R16/M7 fork brief (agent/pre-step)');
   }
   /* (e) Never takes over a decision; custom note; localization. */
   {
-    const { ret, nextCalls } = await runPreStep({}, byEvents('f-reject', { isSeeded: true }), { kind: 'reject', reason: 'nope' });
+    const { ret, nextCalls } = await runPreStep({}, byHeader('f-reject', { isSeeded: true }), { kind: 'reject', reason: 'nope' });
     check('R16: a downstream reject passes through unchanged',
       ret && ret.kind === 'reject' && ret.reason === 'nope' && nextCalls === 1,
       JSON.stringify(ret));
   }
   {
-    const { ret } = await runPreStep({ forkBriefNote: 'BRIEF-TEXT' }, byEvents('f-note', { isSeeded: true }), enter);
+    const { ret } = await runPreStep({ forkBriefNote: 'BRIEF-TEXT' }, byHeader('f-note', { isSeeded: true }), enter);
     const msgs = msgsOf(ret);
     check('R16: forkBriefNote overrides the built-in text verbatim',
       msgs.length === 2 && msgs[0].content[0].text === 'BRIEF-TEXT',
       JSON.stringify(msgs[0] && msgs[0].content[0].text));
   }
   {
-    const zh = await runPreStep({}, byEvents('f-zh', { isSeeded: true }), enter);
-    const en = await runPreStep({ lang: 'en' }, byEvents('f-en', { isSeeded: true }), enter);
+    const zh = await runPreStep({}, byHeader('f-zh', { isSeeded: true }), enter);
+    const en = await runPreStep({ lang: 'en' }, byHeader('f-en', { isSeeded: true }), enter);
     const zhMsgs = msgsOf(zh.ret);
     const enMsgs = msgsOf(en.ret);
     const zhText = zhMsgs.length === 2 ? zhMsgs[0].content[0].text : '';
@@ -806,6 +816,16 @@ section('6c. R16/M7 fork brief (agent/pre-step)');
     const { ret, nextCalls } = await runPreStep({}, agent, enter);
     check('R16 malformed(' + label + '): next() once, decision unchanged',
       nextCalls === 1 && ret && ret.kind === 'enter', 'nextCalls=' + nextCalls + ' ret=' + JSON.stringify(ret));
+  }
+  /* (g) Exceptions while probing the session must return the ORIGINAL decision. */
+  for (const [label, agent] of [
+    ['throwing session getter', { id: 'x', get session() { throw new Error('trap'); } }],
+    ['throwing header getter', { id: 'x', session: { get header() { throw new Error('trap'); } } }],
+  ]) {
+    const { ret, nextCalls } = await runPreStep({}, agent, enter);
+    check('R16 exception(' + label + '): next() once, original decision returned, no throw',
+      nextCalls === 1 && ret && ret.kind === 'enter' && ret === enter,
+      'nextCalls=' + nextCalls + ' ret=' + JSON.stringify(ret));
   }
 }
 

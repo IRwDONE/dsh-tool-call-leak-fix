@@ -78,7 +78,7 @@ configSchema['~standard'] = {
 export const Config = configSchema;
 
 /** Must stay identical to `name` in plugin/package.json (used for source kinds). */
-const PACKAGE_NAME = '@local/structured-output-guard';
+const PACKAGE_NAME = '@irwdone/dsh-structured-output-guard';
 /* ------------------------------------------------------------------ */
 /* message construction                                                */
 /* ------------------------------------------------------------------ */
