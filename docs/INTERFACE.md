@@ -320,3 +320,19 @@ silentFailure === (damaged === true && meta?.hasToolCalls === false)
   故键数仍为 **12**。二者在文档中一律标注为**内部保留、未接线**。
 - **`sanitizeMessages` 保留**在 `src/detect.js` 并仍导出；M5 的状态为**已停用（不注册监听器）**。
   在用的机制回到 **M2 / M3 / M4**。
+
+**裁定 R13（2026-10-30）—— M4 的**有界二次升级**（现场证据驱动）：**
+
+- **触发它的现场证据**：在一个真实用户会话里，M4 **确实工作了**（检测到 `silentFailure` → `turn-stopping`
+  注入 → `agent/inbox/spliced` → **同一 turn 内新开一步**），但**没有救回工作**：那一步之后模型
+  **又写坏了一次**（而且这次把 **23 KB** 内容当正文吐了出来），随后 `maxCorrectionsPerTurn: 1` 用尽、
+  turn 正常关闭。即"自愈"此前只做到"**不静默关闭**"。详见 `verify/REPORT.md` 与 README。
+- **实现（只在 `plugin/index.js`，不动冻结的 `detect.js`）**：按 `count` 分两档注入——
+  - **tier 1**（`count === 0`）：沿用原语义，B 段 + R11 指令；`buildCorrectionMessage` 返回空串时**不注入**。
+  - **tier 2**（`count === 1`）：**丢掉长解释**，换成一句更硬更短的指令——"这一步**只发一个调用**、
+    单个参数**不超过 40 行**、不要输出任何解释、不要把内容打在正文里"，并附上判定 code。
+- **仍然有界**：注入次数上限就是 `maxCorrectionsPerTurn`；同一 turn 内 tier 2 之后不再注入。
+  `DEFAULT_CONFIG.maxCorrectionsPerTurn` **保持 1**（冻结值不动，两套探针不受影响）；
+  **本 bundle 的 patch 显式设为 2**，即"装了就带二次升级"。
+- **判定纪律**：`count >= maxCorrectionsPerTurn` 时一律不注入；tier 2 只改文案、不放宽任何条件。
+- **诚实标注**：tier 2 的**有效性尚未在真实故障中观测到**（它是由上面那次"一次没拦住"的证据所驱动）。

@@ -9,7 +9,10 @@
         maxChars: 20000
         closingTagCount: 8
         endSequenceRepeats: 2
-        maxCorrectionsPerTurn: 1
+        # R13: 2 enables the bounded second escalation — if the step right after
+        # the first correction is damaged again, one shorter/harder correction
+        # follows, then M4 stops for that turn.
+        maxCorrectionsPerTurn: 2
         lang: zh
         # R9 kill switch for the M3 no-op result check.
         noopCheck: true

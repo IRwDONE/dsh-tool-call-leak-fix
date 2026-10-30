@@ -406,7 +406,12 @@ export function apply(ctx, rawConfig) {
 
         // R1: silentFailure is the only self-heal trigger.
         if (scan.silentFailure === true) {
-          pending.set(sessionId, { turn, step: data.step, findings: scan.findings });
+          pending.set(sessionId, {
+            turn,
+            step: typeof data.step === 'number' ? data.step : -1,
+            findings: scan.findings,
+            codes: scan.findings.map((finding) => finding && finding.code).filter(Boolean),
+          });
         } else {
           const previous = pending.get(sessionId);
           if (previous && previous.turn === turn) pending.delete(sessionId);
@@ -450,31 +455,48 @@ export function apply(ctx, rawConfig) {
         if (!record || record.turn !== payload.turn) return;
         if (count >= config.maxCorrectionsPerTurn) return;
 
-        const text = buildCorrectionMessage(record.findings, config);
-        if (!text) return;
         if (typeof agent.inject !== 'function') return;
+
+        // R11 / R13 — two bounded tiers, both kept here so the frozen B builder
+        // in detect.js stays untouched:
+        //   tier 1: state the failure, ask for a smaller retry (B block + order);
+        //   tier 2: the escalation for "the retry was damaged *again*" — drop the
+        //           long explanation, demand ONE call with a tighter chunk cap.
+        const tier = count + 1;
+        const correction = buildCorrectionMessage(record.findings, config);
+        let body = '';
+        if (count === 0) {
+          // Tier 1 keeps the previous semantics exactly: no correction text
+          // means nothing to say, so nothing is injected.
+          body = correction
+            ? '【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，' +
+              '直接用更小的分块重新发起那个调用。\n\n' + correction
+            : '';
+        } else {
+          body =
+            '【第二次尝试仍失败】你上一步依然没有产生任何工具调用，而是又把内容写成了正文。' +
+            '换做法：**这一步只发一个调用**，单个参数**不超过 40 行**；' +
+            '不要输出任何解释，也不要把要写的内容直接打在正文里。' +
+            (Array.isArray(record.codes) && record.codes.length > 0
+              ? '（判定：' + record.codes.join('、') + '）'
+              : '');
+        }
+        if (!body) return;
 
         // inject() queues into `next-step` without waking the driver, which is
         // exactly what keeps the closing turn open for one more step.
-        // R11: the B block explains *what* went wrong; this directive is what
-        // makes the model actually re-issue the call instead of commenting on
-        // it. Kept in index.js so the frozen B builder stays untouched.
-        const injected = pluginMessage(
-          '【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，' +
-            '直接用更小的分块重新发起那个调用。\n\n' +
-            text,
-          SOURCE_RUNTIME_CONTEXT,
-        );
+        const injected = pluginMessage(body, SOURCE_RUNTIME_CONTEXT);
         agent.inject(injected);
         log({
           where: 'turn-stopping.injected',
           sessionId,
           turn: payload.turn,
-          textLength: text.length,
+          tier,
+          textLength: body.length,
           injected,
         });
 
-        corrections.set(sessionId, { turn: payload.turn, count: count + 1 });
+        corrections.set(sessionId, { turn: payload.turn, count: tier });
         pending.delete(sessionId);
       } catch {
         /* serial dispatch propagates listener errors into the turn: swallow. */

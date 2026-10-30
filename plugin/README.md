@@ -120,6 +120,9 @@ Host 插件。针对**工具调用参数边界丢失**（模型侧结构化输�
   修正：listener 现在**先检测冻结**，命中就记 `skipped:'frozen-options'` 并照常 `next()`；文档与 Config 说明全部改为**"当前无效"**。**未修的部分**：让改写真正生效需要 harness 给可写接缝，插件侧无法绕过。
 - **2026-10-29 · 按用户决策停用 M5**：用户口径「暂时收手，开关可以不保留，代码留着，后续看情况再决定」。落地：删除 `llm/stream` 监听器注册与 `sanitizeMessages` 的 import；`plugin/cordis.patch.yml` **不再暴露 `contextGuard`**；`sanitizeMessages` **保留在 `src/detect.js` 并仍导出**；`index.js` 原地留下"为什么不能做 + 将来如何重新接线"的注释（含 D-8 行号，以及三条重新接线必须遵守的规则：先查 `Object.isFrozen`、失败要显式报告、任何路径恰好一次 `next()`）。
   于是插件的"在用机制"回到 **M2 / M3 / M4**（M2 与 M4 均已现场验证），M5 状态为**已停用**。
+- **2026-10-30 · M4 两档有界升级（R13，现场证据驱动）**：在一个**真实用户会话**里，M4 确实走通（检测 → `agent.inject` → turn 未关闭、多跑一步），但**那一步又写坏了**（还把 ~23 KB 当正文吐出），随后 `maxCorrectionsPerTurn: 1` 用尽、turn 正常关闭 —— 即"自愈"此前只到"不静默关闭"。
+  现在按 `count` 分档注入（**只在 `index.js`，不动冻结的 `detect.js`**）：tier 1 = 原语义（B 段 + R11 指令，`buildCorrectionMessage` 空则**不注入**）；tier 2 = 丢掉长解释、换成更硬更短的指令（"这一步只发一个调用、参数不超过 40 行、不要解释、不要把内容打在正文里"+ 判定 code）。上限仍是 `maxCorrectionsPerTurn`；`DEFAULT_CONFIG` 冻结值**不动**（仍为 `1`），但**本 bundle 的 patch 设为 `2`**。
+  **诚实标注**：tier 2 的有效性**尚未**在真实故障中观测到。M4 的现场证据同时把 README 里"自愈能让模型真正重做"一条从"待办"改为"**真实故障中观测到：没有**"。
 
 ## 文件
 
