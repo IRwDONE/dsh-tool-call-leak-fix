@@ -1676,6 +1676,68 @@ async function main() {
     }
   });
 
+  /* P. D-10 / R14 — namespace-prefixed call markup.
+     A real failure leaked `antml:invoke` / `antml:parameter`, which contains no
+     bare `invoke`/`parameter` substring. Every closing tag below is assembled
+     from fragments on purpose (the project's own discipline: never emit a
+     contiguous literal closing-tag run). */
+  section('P. D-10 命名空间方言（R14）：带前缀的调用标记必须被认出来');
+
+  const LTC = '<';
+  const NS_TAIL = LTC + '/antml:';
+  const NS_HEAD = LTC + 'antml:invoke name="run_code">';
+  const NS_PARAM = (name) => LTC + 'antml:parameter name="' + name + '">';
+  const NS_LEAK =
+    '我先把这一次调用压缩到 5 行以内，并严格只用一次 `' + NS_TAIL + 'invoke>` 收尾。\n\n' +
+    NS_HEAD + '\n' +
+    NS_PARAM('code') + 'const fs = await import("node:fs/promises");' + NS_TAIL + 'parameter>\n' +
+    NS_PARAM('description') + 'check' + NS_TAIL + 'parameter>\n';
+
+  check('P1[D-10] 带命名空间前缀的泄漏标记 → damaged', () => {
+    const r = scanAssistantText(NS_LEAK, {}, { hasToolCalls: false, toolCallCount: 0 });
+    ok(r.damaged === true, 'damaged 应为 true（实际 ' + r.damaged + '，codes=' + codes(r).join(',') + '）');
+    ok(hasCode(r, 'MARKUP_LEAKED_AS_TEXT'), '应命中 MARKUP_LEAKED_AS_TEXT');
+  });
+
+  check('P2[D-10] 同一文本 + hasToolCalls:false → silentFailure（M4 的唯一触发条件）', () => {
+    const r = scanAssistantText(NS_LEAK, {}, { hasToolCalls: false });
+    eq(r.silentFailure, true, 'silentFailure');
+  });
+
+  check('P3[D-10] 带前缀的尾部连续结束序列 → END_SEQUENCE_MULTIPLIED 且按 R4 门槛 deny', () => {
+    const fooTail = LTC + '/foo:invoke>';
+    const leaf =
+      LTC + 'foo:invoke name="x">\n' +
+      Array.from({ length: 25 }, (_, i) => 'line ' + i).join('\n') +
+      '\n' + fooTail + '\n' + fooTail + '\n';
+    const r = scanToolArguments('write', { content: leaf }, {});
+    ok(
+      hasCode(r, 'END_SEQUENCE_MULTIPLIED'),
+      '应命中 END_SEQUENCE_MULTIPLIED（实际 ' + codes(r).join(',') + '）',
+    );
+    eq(r.action, 'deny', 'action');
+  });
+
+  check('P4[D-10 护栏] 含冒号 / 带前缀但非调用标记的文本不得被误判', () => {
+    const guards = [
+      '参考 https://example.com/a 这个链接。',
+      LTC + 'svg:path d="M0 0">' + LTC + '/svg:path> 是 SVG 命名空间标签，不是工具调用。',
+      LTC + 'html>' + LTC + 'body>hello' + LTC + '/body>' + LTC + '/html>',
+      '时间 12:30 出发，路径 C:/tmp/a.txt 可读。',
+    ];
+    for (const g of guards) {
+      const r = scanAssistantText(g, {}, { hasToolCalls: false });
+      eq(r.damaged, false, '不得判 damaged：' + JSON.stringify(g.slice(0, 44)));
+    }
+  });
+
+  check('P5[D-10 零漂移] 不含冒号的文本行为不变（规范化必须早退）', () => {
+    const plain = '普通中文说明，没有调用标记，也没有冒号前缀。';
+    const r = scanAssistantText(plain, {}, { hasToolCalls: false });
+    eq(r.damaged, false, 'damaged');
+    eq(r.evidence.length, plain.length, 'evidence.length 应与原文一致');
+  });
+
   return 0;
 }
 

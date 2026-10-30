@@ -18,6 +18,8 @@ When a model writes a very large tool-call argument — especially when the payl
 - **V2 — missing opening marker**: only a parameter opening appears, with no outer call opening;
 - **V3 — leaked as prose**: the call envelope ends up in the assistant's **text** and is never recognised as a tool call.
 
+The leaked markup also comes in **more than one dialect**: bare tags (`<invoke` / `<parameter`) *and* **namespace-prefixed** ones (e.g. `<antml:invoke>` / `<antml:parameter>`). The prefixed form once made the detector miss a real failure **entirely** — `<antml:parameter` contains no `<parameter` substring. That is defect **D-10**, now fixed (see §7.4).
+
 All three fail **silently**: nothing executes, nothing errors, and the turn closes as though the work had been done.
 
 A related fourth shape (**V4**) comes from the harness's tolerant JSON parser: malformed arguments degrade to `{}`, so the tool runs with empty arguments.
@@ -152,7 +154,7 @@ Verification is split deliberately: "the code does what the contract says" is pr
 
 ### 7.3 Docs and evidence
 
-- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R13), including the ones changed after evidence contradicted them.
+- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R14), including the ones changed after evidence contradicted them.
 - `docs/CONTRACTS.md` — the pre-implementation contract dig; every claim carries a file path and line number.
 - `docs/DESIGN.md` — failure taxonomy, trigger conditions, mechanism design, and the corrections made after measurement.
 - `docs/PROMPTS.md` — the prevention/correction/denial texts, kept even though the plugin no longer injects any prompt (available for manual use).
@@ -167,6 +169,7 @@ Listed because they are the useful part: two of them were only findable by readi
 | `D-0` | high | Injected messages used the retired `source.kind = 'plugin'`, which the v4 session format **hard-rejects** (it can make a session unreadable). Fixed to a producer-owned kind |
 | `D-1` | medium-high | The truncation predicate was inverted: it missed real truncation **and** blocked legitimate documents — including the plugin's own README. Fixed, with direction-sensitive test cases added |
 | `D-8` | high (accepted) | `M5` cannot rewrite a frozen request ⇒ a **capability gap**, not a bug. Wiring removed, implementation kept |
+| `D-10` | high | The detector only knew **bare** tags, so it could not see the **namespace-prefixed** form that a real failure used (`<antml:invoke>` / `<antml:parameter>`) ⇒ `damaged=false` ⇒ M4 never fired and the turn closed silently. Fixed (R14: structural analysis runs on a namespace-stripped shadow copy; text without a colon is returned as the identical string, so nothing drifts). **Corpus-level check**: across every real session (2505 assistant messages) exactly **1** was reachable only with this fix — the very fork the user hit |
 | `D-5 / D-6 / D-7 / D-9` | low | Contract drift, a hardcoded local path in a default, a diagnostic switch left on in the shipped patch, and a self-contradictory doc paragraph. All fixed |
 
 ## 8. Limitations

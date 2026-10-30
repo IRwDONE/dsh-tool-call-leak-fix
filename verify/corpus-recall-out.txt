@@ -1,0 +1,21 @@
+current   detect.js sha16=16227b7baf2b4686
+pre-D-10  detect.js sha16=4ea090ce921e181c
+session log files = 75
+
+=== independently computed ===
+{
+  "assistantMessageEvents": 3536,
+  "assistantMessagesWithText": 2535,
+  "assistantMessagesTextOnlyNoToolCalls": 186,
+  "assistantMessagesWithTextAndToolCalls": 2349,
+  "damagedCurrent": 25,
+  "damagedCurrentWithToolCalls": 5,
+  "damagedCurrentNoToolCalls": 20,
+  "damagedPreD10": 24,
+  "damagedOnlyViaD10": 1,
+  "parseErrorsSkipped": 0,
+  "frameErrorsSkipped": 0
+}
+
+=== damaged ONLY via D-10 ===
+{"session":"session-c8741511-54b9-4cc9-be7e-8860fb22234f","codes":["MARKUP_LEAKED_AS_TEXT:error","UNPAIRED_CLOSING_TAG:warn"],"silentFailure":true,"textLength":745,"hasNamespacePrefix":true,"hasBareInvoke":false,"hasBareParameter":false}

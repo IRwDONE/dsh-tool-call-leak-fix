@@ -1,15 +1,15 @@
 
 == 0. provenance ==
-detect.js   sha256[0:16]=4ea090ce921e181c  bytes=38668
+detect.js   sha256[0:16]=16227b7baf2b4686  bytes=40179
 node        v24.19.0
-fixture     v1-end-multiplied.txt            bytes=  1360 lines=47 sha16=f122975dd6e3ccd1
-fixture     v2-missing-opening.txt           bytes=   496 lines=16 sha16=a0426795ad309a0d
-fixture     v3-leaked-markup.txt             bytes=   486 lines=14 sha16=510d40576795dc26
-fixture     ok-normal-html.txt               bytes=  1780 lines=53 sha16=ce8f1115c11dfd02
-fixture     ok-normal-js.txt                 bytes=  3585 lines=124 sha16=8550a9605bfb72c3
-fixture     ok-normal-markdown-table.txt     bytes=   621 lines=17 sha16=0a96fa859676e3b1
-fixture     ok-short-text-few-tags.txt       bytes=   191 lines=3 sha16=9dc2c270fa70d76f
-fixture     ok-single-end-sequence.txt       bytes=   156 lines=6 sha16=9d011a0e6c6f64fa
+fixture     v1-end-multiplied.txt            bytes=  1406 lines=47 sha16=a247803f8d578730
+fixture     v2-missing-opening.txt           bytes=   511 lines=16 sha16=29c5426c1864a14f
+fixture     v3-leaked-markup.txt             bytes=   499 lines=14 sha16=d49d9fdb6bc07cac
+fixture     ok-normal-html.txt               bytes=  1832 lines=53 sha16=b646f6ff72c9f9a0
+fixture     ok-normal-js.txt                 bytes=  3708 lines=124 sha16=de737e023336dd24
+fixture     ok-normal-markdown-table.txt     bytes=   637 lines=17 sha16=b564ea0dcac3f09e
+fixture     ok-short-text-few-tags.txt       bytes=   193 lines=3 sha16=b728b1c4522b133b
+fixture     ok-single-end-sequence.txt       bytes=   161 lines=6 sha16=3c22e392ebbfb3d5
 
 == 1. exports + DEFAULT_CONFIG (INTERFACE §暴露/§配置) ==
 PASS  export DEFAULT_CONFIG is object
@@ -174,6 +174,53 @@ PASS  negative ok-short-text-few-tags: damaged===false
 PASS  negative ok-short-text-few-tags: silentFailure===false
 PASS  negative ok-single-end-sequence: damaged===false
 PASS  negative ok-single-end-sequence: silentFailure===false
+
+== 5b. D-10/R14: namespace tolerance — zero drift + dialect recall ==
+PASS  scanAssistantText(zero-drift: url only) does not throw
+PASS  D-10 zero-drift: url only is NOT damaged
+PASS  D-10 zero-drift: url only verdict identical to pre-D-10
+PASS  scanAssistantText(zero-drift: url in attribute) does not throw
+PASS  D-10 zero-drift: url in attribute is NOT damaged
+PASS  D-10 zero-drift: url in attribute verdict identical to pre-D-10
+PASS  scanAssistantText(zero-drift: svg qualified tag) does not throw
+PASS  D-10 zero-drift: svg qualified tag is NOT damaged
+PASS  D-10 zero-drift: svg qualified tag verdict identical to pre-D-10
+PASS  scanAssistantText(zero-drift: http pseudo-tag (URL guard)) does not throw
+PASS  D-10 zero-drift: http pseudo-tag (URL guard) is NOT damaged
+PASS  D-10 zero-drift: http pseudo-tag (URL guard) verdict identical to pre-D-10
+PASS  scanAssistantText(zero-drift: plain html) does not throw
+PASS  D-10 zero-drift: plain html is NOT damaged
+PASS  D-10 zero-drift: plain html verdict identical to pre-D-10
+PASS  scanAssistantText(zero-drift: xml namespace decl) does not throw
+PASS  D-10 zero-drift: xml namespace decl is NOT damaged
+PASS  D-10 zero-drift: xml namespace decl verdict identical to pre-D-10
+NOTE  URL guard observability :: the (?!\/) URL guard in NAMESPACE_PREFIX_RE is defence-in-depth: rewriting `<http://x/>` could only ever produce `<//x/>`, which is not a call marker, so it is not behaviourally observable through scanAssistantText; the case above only proves no verdict drift.
+PASS  scanAssistantText(prefixed V2 (parameter open, no invoke open, prose)) does not throw
+PASS  D-10 recall: prefixed V2 (parameter open, no invoke open, prose) => damaged
+PASS  D-10 recall: prefixed V2 (parameter open, no invoke open, prose) hits MISSING_OPENING_MARKUP
+PASS  D-10 recall: prefixed V2 (parameter open, no invoke open, prose) was INVISIBLE pre-D-10 (damaged=false)
+PASS  scanAssistantText(prefixed trailing end-sequence run) does not throw
+PASS  D-10 recall: prefixed trailing end-sequence run => damaged
+PASS  D-10 recall: prefixed trailing end-sequence run hits END_SEQUENCE_MULTIPLIED
+PASS  D-10 recall: prefixed trailing end-sequence run was INVISIBLE pre-D-10 (damaged=false)
+PASS  scanAssistantText(prefixed truncated structure) does not throw
+PASS  D-10 recall: prefixed truncated structure => damaged
+PASS  D-10 recall: prefixed truncated structure hits TRUNCATED_PAYLOAD
+PASS  D-10 recall: prefixed truncated structure was INVISIBLE pre-D-10 (damaged=false)
+PASS  scanAssistantText(prefixed leaked markup in prose) does not throw
+PASS  D-10 recall: prefixed leaked markup in prose => damaged
+PASS  D-10 recall: prefixed leaked markup in prose hits MARKUP_LEAKED_AS_TEXT
+PASS  D-10 recall: prefixed leaked markup in prose was INVISIBLE pre-D-10 (damaged=false)
+PASS  D-10 zero-drift on fixture: v1-end-multiplied.txt
+PASS  D-10 zero-drift on fixture: v2-missing-opening.txt
+PASS  D-10 zero-drift on fixture: v3-leaked-markup.txt
+PASS  D-10 zero-drift on fixture: ok-normal-html.txt
+PASS  D-10 zero-drift on fixture: ok-normal-js.txt
+PASS  D-10 zero-drift on fixture: ok-normal-markdown-table.txt
+PASS  D-10 zero-drift on fixture: ok-short-text-few-tags.txt
+PASS  D-10 zero-drift on fixture: ok-single-end-sequence.txt
+PASS  R14: evidence.length / closingTagCount are measured on the original text
+PASS  R14: sanitizeMessages inherits namespace tolerance (prefixed damage is rewritten)
 
 == 6. scanToolArguments: shape, deny gate (lead-reported false positive) ==
   sizes: damagedBig=1170ch, okBigHtml=5890ch, shortQuotingProtocol=34ch
@@ -496,14 +543,14 @@ NOTE  FindingCode coverage :: produced=CLOSING_TAG_DENSITY,END_SEQUENCE_MULTIPLI
 PASS  5MB plain text: no throw, <5000ms
 PASS  5MB plain text: length reported
 PASS  5MB of closing tags: no throw, <5000ms
-  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=14.1
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=19.3
 PASS  ~2.6MB call markup via args: no throw, <5000ms
-  call-markup args: action=deny ms=21.1 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+  call-markup args: action=deny ms=29.0 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
 PASS  pathological < / > flood: no throw, <5000ms
 PASS  pathological flood via args: no throw, <5000ms
 
 == SUMMARY ==
-PASS=436  FAIL=0  NOTES=3  DEFECTS=0
+PASS=480  FAIL=0  NOTES=4  DEFECTS=0
 
 --- raw snapshot ---
 frozenCodesProduced=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","INTERNAL_ERROR","MARKUP_LEAKED_AS_TEXT","MISSING_OPENING_MARKUP","PAYLOAD_TOO_LONG","SUSPICIOUS_NOOP_RESULT","TRUNCATED_PAYLOAD","UNPAIRED_CLOSING_TAG"]

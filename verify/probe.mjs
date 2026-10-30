@@ -199,6 +199,14 @@ const {
   sanitizeMessages,
 } = detect;
 
+/* Pre-D-10 detector (extracted from git as verify/_pre-d10-detect.mjs) — used to
+ * measure the D-10/R14 delta directly: only the namespace-dialect class may
+ * change behaviour; every pre-existing input must be bit-identical. */
+let preD10 = null;
+try {
+  preD10 = await import(pathToFileURL(path.join(HERE, '_pre-d10-detect.mjs')).href);
+} catch { /* optional: corpus/delta checks are skipped when unavailable */ }
+
 section('0. provenance');
 const detectSrc = readFileSync(DETECT_PATH, 'utf8');
 console.log('detect.js   sha256[0:16]=' + sha256(detectSrc) + '  bytes=' + Buffer.byteLength(detectSrc));
@@ -509,6 +517,113 @@ for (const [label, text] of negatives) {
 }
 
 /* ======================================================================== */
+section('5b. D-10/R14: namespace tolerance — zero drift + dialect recall');
+{
+  const countClose = (s) => s.split(CLOSE_PREFIX).length - 1;
+  const NS_OPEN = LT + 'antml:invoke';
+  const NS_PARAM = LT + 'antml:parameter';
+  const NS_END_INVOKE = LT + SL + 'antml:invoke' + GT;
+  const NS_END_PARAM = LT + SL + 'antml:parameter' + GT;
+
+  /* (a) ZERO DRIFT: colon-bearing inputs that are NOT namespace call tags must
+   * keep the undamaged verdict they had before D-10. */
+  const driftCases = [
+    ['url only', 'https://example.com/a'],
+    ['url in attribute', LT + 'a href="https://example.com/a">x' + LT + SL + 'a' + GT],
+    ['svg qualified tag', LT + 'svg:path d="M0 0"/>' + '\n' + LT + SL + 'svg:path' + GT],
+    ['http pseudo-tag (URL guard)', LT + 'http://x/>'],
+    ['plain html', LT + '!DOCTYPE html>' + '\n' + LT + 'html lang="en">' + LT + 'body>' + LT + 'p>hello' + LT + SL + 'p>' + LT + SL + 'body>' + LT + SL + 'html>'],
+    ['xml namespace decl', LT + 'root xmlns:x="urn:x">' + LT + 'x:child>v' + LT + SL + 'x:child>' + LT + SL + 'root>'],
+  ];
+  for (const [label, text] of driftCases) {
+    const r = callNoThrow('scanAssistantText(zero-drift: ' + label + ')', () => scanAssistantText(text));
+    if (!r) continue;
+    check('D-10 zero-drift: ' + label + ' is NOT damaged', r.damaged === false,
+      'findings=' + JSON.stringify(r.findings.map((f) => f.code)));
+    if (preD10) {
+      const p = preD10.scanAssistantText(text);
+      check('D-10 zero-drift: ' + label + ' verdict identical to pre-D-10',
+        p.damaged === r.damaged && canon(p.findings) === canon(r.findings),
+        'pre=' + JSON.stringify(p.findings.map((f) => f.code)));
+    }
+  }
+  note('URL guard observability',
+    'the (?!\\/) URL guard in NAMESPACE_PREFIX_RE is defence-in-depth: rewriting `<http://x/>` ' +
+    'could only ever produce `<//x/>`, which is not a call marker, so it is not behaviourally ' +
+    'observable through scanAssistantText; the case above only proves no verdict drift.');
+
+  /* (b) DIALECT RECALL: prefixed call envelopes must be caught now, and were
+   * invisible before D-10. */
+  const recallCases = [
+    ['prefixed V2 (parameter open, no invoke open, prose)',
+      NS_PARAM + ' name="path">a.txt' + NS_END_PARAM + '\n这是一段说明文字，参数缺少开场标记。\n',
+      ['MISSING_OPENING_MARKUP']],
+    ['prefixed trailing end-sequence run',
+      NS_OPEN + ' name="w">\n' + NS_PARAM + ' name="c">x' + NS_END_PARAM + '\n' + NS_END_INVOKE + '\n' + NS_END_INVOKE + '\n',
+      ['END_SEQUENCE_MULTIPLIED']],
+    ['prefixed truncated structure',
+      NS_OPEN + ' name="w">\n' + NS_PARAM + ' name="c">abc',
+      ['TRUNCATED_PAYLOAD']],
+    ['prefixed leaked markup in prose',
+      '样式已经写好了。\n' + NS_OPEN + ' name="w">\n' + NS_PARAM + ' name="c">' + LT + 'div>x' + LT + SL + 'div' + GT + '\n' + NS_END_PARAM + '\n' + NS_END_INVOKE + '\n以上。\n',
+      ['MARKUP_LEAKED_AS_TEXT']],
+  ];
+  for (const [label, text, wantCodes] of recallCases) {
+    const r = callNoThrow('scanAssistantText(' + label + ')', () => scanAssistantText(text));
+    if (!r) continue;
+    harvest(r);
+    check('D-10 recall: ' + label + ' => damaged', r.damaged === true,
+      'codes=' + JSON.stringify(r.findings.map((f) => f.code)));
+    check('D-10 recall: ' + label + ' hits ' + wantCodes.join('+'),
+      wantCodes.every((c) => hasBlockingCodes(r.findings, [c])),
+      'codes=' + JSON.stringify(r.findings.map((f) => f.code)));
+    if (preD10) {
+      const p = preD10.scanAssistantText(text);
+      check('D-10 recall: ' + label + ' was INVISIBLE pre-D-10 (damaged=false)',
+        p.damaged === false, 'pre codes=' + JSON.stringify(p.findings.map((f) => f.code)));
+    }
+  }
+
+  /* (c) ZERO DRIFT on every existing fixture: identical findings AND evidence. */
+  if (preD10) {
+    for (const f of ['v1-end-multiplied.txt', 'v2-missing-opening.txt', 'v3-leaked-markup.txt',
+      'ok-normal-html.txt', 'ok-normal-js.txt', 'ok-normal-markdown-table.txt',
+      'ok-short-text-few-tags.txt', 'ok-single-end-sequence.txt']) {
+      const text = readFixture(f);
+      const a = scanAssistantText(text);
+      const b = preD10.scanAssistantText(text);
+      check('D-10 zero-drift on fixture: ' + f,
+        a.damaged === b.damaged && canon(a.findings) === canon(b.findings) && canon(a.evidence) === canon(b.evidence),
+        'now=' + JSON.stringify(a.findings.map((x) => x.code)) +
+        ' pre=' + JSON.stringify(b.findings.map((x) => x.code)));
+    }
+  } else {
+    note('pre-D-10 module missing', 'D-10 delta checks skipped (verify/_pre-d10-detect.mjs not found)');
+  }
+
+  /* (d) Numeric evidence comes from the ORIGINAL text, not the shadow copy. */
+  {
+    const text = NS_OPEN + ' name="w">\n' + NS_PARAM + ' name="c">x' + NS_END_PARAM + '\n' + NS_END_INVOKE + '\n';
+    const r = scanAssistantText(text);
+    check('R14: evidence.length / closingTagCount are measured on the original text',
+      r.evidence.length === text.length && r.evidence.closingTagCount === countClose(text),
+      JSON.stringify({ len: r.evidence.length, wantLen: text.length, close: r.evidence.closingTagCount, wantClose: countClose(text) }));
+  }
+
+  /* (e) sanitizeMessages inherits the namespace tolerance. The sample must be
+   * genuinely damaged: this one is the prefixed V2 analogue (parameter opening
+   * with no invoke opening + prose), which probe (b) already proved damaged. */
+  {
+    const prefixedV2 = NS_PARAM + ' name="path">a.txt' + NS_END_PARAM +
+      '\n这是一段说明文字，参数缺少开场标记。\n';
+    const msg = { id: 'ns1', role: 'assistant', content: [{ type: 'text', text: prefixedV2 }] };
+    const r = sanitizeMessages([msg], { contextGuard: true });
+    check('R14: sanitizeMessages inherits namespace tolerance (prefixed damage is rewritten)',
+      r.changed === true && r.messages[0].content.length === 1,
+      JSON.stringify(r).slice(0, 160));
+  }
+}
+
 section('6. scanToolArguments: shape, deny gate (lead-reported false positive)');
 HB = 'args';
 /* ======================================================================== */
