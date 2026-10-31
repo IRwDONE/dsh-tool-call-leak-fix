@@ -82,7 +82,7 @@ const CJK_PUNCT_RE = /[\u3000-\u303f\uff01-\uff5e]/;
  */
 const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR';
 
-/** @type {{enabled: boolean, maxLines: number, maxChars: number, closingTagCount: number, endSequenceRepeats: number, maxCorrectionsPerTurn: number, lang: 'zh'|'en', noopCheck: boolean, debugLog: boolean, debugLogPath: string, contextGuard: boolean, contextGuardNote: string, forkBrief: boolean, forkBriefNote: string}} */
+/** @type {{enabled: boolean, maxLines: number, maxChars: number, closingTagCount: number, endSequenceRepeats: number, maxCorrectionsPerTurn: number, lang: 'zh'|'en', noopCheck: boolean, debugLog: boolean, debugLogPath: string, contextGuard: boolean, contextGuardNote: string, forkBrief: boolean, forkBriefNote: string, autoCompact: boolean}} */
 export const DEFAULT_CONFIG = {
   enabled: true,
   maxLines: 100,
@@ -120,6 +120,13 @@ export const DEFAULT_CONFIG = {
   forkBrief: true,
   /** R16: briefing text; an empty string uses the built-in localized text. */
   forkBriefNote: '',
+  /**
+   * R18 (M9): when a session's history looks poisoned (it is a fork, or a
+   * degeneration was detected in it), ask the harness to compact that history
+   * once the agent goes idle. OFF by default: a compaction run is a real
+   * summarisation call on the user's account, so it is enabled deliberately.
+   */
+  autoCompact: false,
 };
 
 /** Non-empty string fields; anything else falls back to the default. */
@@ -159,6 +166,7 @@ function defaultCopy() {
     contextGuardNote: DEFAULT_CONFIG.contextGuardNote,
     forkBrief: DEFAULT_CONFIG.forkBrief,
     forkBriefNote: DEFAULT_CONFIG.forkBriefNote,
+    autoCompact: DEFAULT_CONFIG.autoCompact,
   };
 }
 
@@ -549,7 +557,7 @@ export function mergeConfig(partial) {
   try {
     if (!isPlainObject(partial)) return out;
 
-    for (const key of ['enabled', 'noopCheck', 'debugLog', 'contextGuard', 'forkBrief']) {
+    for (const key of ['enabled', 'noopCheck', 'debugLog', 'contextGuard', 'forkBrief', 'autoCompact']) {
       let value;
       try {
         value = partial[key];

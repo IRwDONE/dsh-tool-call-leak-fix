@@ -299,6 +299,8 @@ export function apply(ctx, rawConfig) {
       // Printed so a missing `pre-step.forkBrief` can never be confused with
       // "M7 is switched off here" (R16 field check).
       forkBrief: config.forkBrief,
+      // Printed so a silent M9 (R18) can never be confused with "switched off".
+      autoCompact: config.autoCompact,
     },
   });
   if (config.enabled !== true) return;
@@ -356,6 +358,9 @@ export function apply(ctx, rawConfig) {
   /* M4 — observe committed assistant messages, then self-heal at turn close. */
   const pending = new Map();
   const corrections = new Map();
+  // R18 (M9): sessions whose history looks poisoned, and those already cleaned.
+  const poisoned = new Set();
+  const compacted = new Set();
 
   install(ctx, () =>
     ctx.on('session/event', (...args) => {
@@ -503,6 +508,9 @@ export function apply(ctx, rawConfig) {
 
         corrections.set(sessionId, { turn: payload.turn, count: tier });
         pending.delete(sessionId);
+        // R18: a damaged step just entered this history. If `autoCompact` is on,
+        // the harness will summarise the poisoned span away once the agent idles.
+        poisoned.add(sessionId);
       } catch {
         /* serial dispatch propagates listener errors into the turn: swallow. */
       }
@@ -586,11 +594,82 @@ export function apply(ctx, rawConfig) {
           seeded: head.seeded,
           textLength: noteText.length,
         });
+        // R18: a fork's inherited history is exactly the poisoned span.
+        poisoned.add(sessionId);
         // Spread so fields such as `startsRequestSeries` survive (practices.md).
         const messages = Array.isArray(decision.messages) ? decision.messages : [];
         return { ...decision, messages: [note, ...messages] };
       } catch {
         return decision;
+      }
+    }),
+  );
+
+  /* M9 — R18 idle compaction (2026-11-01).
+     The one available lever for the *poisoned history* problem. We cannot
+     rewrite the model-visible history (D-8/M5: the llm/stream request is
+     frozen), but the harness can: `compaction.compactIfNeeded(..., 'context-overflow', ...)`
+     "may force a useful balanced reduction even below the normal threshold", and
+     a successful run "replaces the selected surface span with one summary node"
+     (Service contract, verified via cordis_inspect_query — not assumed; D-12).
+     So once a poisoned session goes idle, its damaged steps stop being replayed
+     verbatim and the model stops imitating them.
+     OFF by default (`autoCompact`): a compaction run is a real summarisation call
+     on the user's account. Bounded to once per session; never awaited on the
+     driver's path; every failure is logged instead of silently swallowed. */
+  install(ctx, () =>
+    ctx.on('agent/status', function statusChanged(payload) {
+      try {
+        if (config.autoCompact !== true) return;
+        const agent = payload && payload.agent;
+        const sessionId = agent && typeof agent.id === 'string' ? agent.id : '';
+        if (!sessionId || payload.status !== 'idle') return;
+        if (!poisoned.has(sessionId) || compacted.has(sessionId)) return;
+        const compaction = typeof ctx.get === 'function' ? ctx.get('compaction') : undefined;
+        if (!compaction || typeof compaction.compactIfNeeded !== 'function') {
+          // Honest miss (R5 spirit): say so instead of doing nothing quietly.
+          log({ where: 'status.compact-skip', sessionId, reason: 'no-compaction-service' });
+          return;
+        }
+        const session = agent.session;
+        if (!session) {
+          log({ where: 'status.compact-skip', sessionId, reason: 'no-session' });
+          return;
+        }
+        compacted.add(sessionId);
+        let abort;
+        try {
+          abort = new AbortController().signal;
+        } catch {
+          return;
+        }
+        Promise.resolve(
+          compaction.compactIfNeeded({ session, options: {} }, 'context-overflow', abort),
+        ).then(
+          (outcome) => {
+            log({
+              where: 'status.compacted',
+              sessionId,
+              compacted: Boolean(outcome),
+              shadowedSeqs: outcome && Array.isArray(outcome.shadowedSeqs) ? outcome.shadowedSeqs.length : 0,
+              shadowedTokens:
+                outcome && typeof outcome.shadowedTokenCount === 'number' ? outcome.shadowedTokenCount : 0,
+            });
+          },
+          (error) => {
+            log({
+              where: 'status.compact-failed',
+              sessionId,
+              message: String((error && error.message) || error),
+            });
+          },
+        );
+      } catch (error) {
+        try {
+          log({ where: 'status.compact-failed', message: String((error && error.message) || error) });
+        } catch {
+          /* observation only: never propagate into the driver */
+        }
       }
     }),
   );

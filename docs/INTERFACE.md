@@ -41,10 +41,11 @@ export function sanitizeMessages(messages, opts) {}   // R12 (M5) — added 2026
   contextGuardNote: '',          // ★R12：替换注记；空串=内置中英文注记
   forkBrief: true,               // ★R16（M7）：fork 会话在首步之前注入一次"会话简报"
   forkBriefNote: '',             // ★R16：简报文本；空串=内置中英文文本
+  autoCompact: false,            // ★R18（M9）：被污染的会话在 idle 时交给 harness 压缩（默认关：会产生一次摘要调用）
 }
 ```
 
-**共 14 个键**（R9 后 8 个，R10 再 +2，R12 再 +2，R16 再 +2）。`mergeConfig(partial)` → 新对象，缺字段用默认值补齐；非法值回退默认。
+**共 15 个键**（R9 后 8 个，R10 再 +2，R12 再 +2，R16 再 +2，R18 再 +1）。`mergeConfig(partial)` → 新对象，缺字段用默认值补齐；非法值回退默认。
 测试请**从 `DEFAULT_CONFIG` 推导键集合**，不要硬编码字符串。
 
 **裁定 R10（2026-10-28）—— 诊断日志开关：**
@@ -433,3 +434,35 @@ silentFailure === (damaged === true && meta?.hasToolCalls === false)
   `S1`（裸信封 → damaged + silentFailure）/ `S2`（同一信封放进代码块 → 不 damaged）/
   `S3`（fixture 一致性）三条断言 —— 覆盖**只增不减**。
 - **护栏**：以代码块起头的引用、以散文起头的讲解，均**不误报**（S2/S3 与既有反例覆盖）。
+
+**裁定 R18（2026-11-01）—— M9「闲置压缩」：把被污染的历史交给 harness 自己压掉**
+
+- **它要解决的现场**：一次真实 fork（`session-c4f8b81c`，turn 27）里，插件的每一环**都执行了**
+  （`session/event.scan` 命中 → tier 1 注入 → 又写坏 → tier 2 注入 → turn 结束），
+  但模型**始终不产生调用**：step1 2845 字符、step2 **9168 字符**、step3 271 字符，全部 damaged。
+  即：**每次失败的重试又往历史里塞一个坏样本**，模型持续模仿它。M4/M7 只能"当场纠正"，
+  不能移除已经进入历史的坏样本。
+- **为什么这是唯一可达的路**：改写模型可见历史需要可写接缝，而 `llm/stream` 收到的是**冻结请求**
+  （D-8/M5）。**但 harness 自己有一条正路**：`ctx.compaction` —— 契约明确写着
+  `compactIfNeeded(agent, trigger, signal)`"**may force a useful balanced reduction even below the
+  normal threshold**"，且"a successful run **replaces the selected surface span with one summary node**"。
+  即：**让 harness 把那段坏历史压成一个摘要节点**，坏样本就不再被逐字回放。
+  （接口取自 `cordis_inspect_query` 的运行时契约，**不是猜的**——D-12 的教训。）
+- **触发点与身份**（均来自契约）：`agent/status`（emit，payload `{agent, status}`，
+  `AgentStatus = 'idle' | 'running'`）。选 **idle** 是因为 `compactNow` 的契约写明要 "**idle** agent"。
+- **被标记为"污染"的两个来源**：① M7 认定本会话是 **fork**（继承来的历史就是污染段）；
+  ② M4 **检测到并纠正了一次损坏步骤**。
+- **行为**：`autoCompact === true`、该会话已被标记、且尚未压缩过、且**该会话此刻 idle** 时，
+  调用 `compaction.compactIfNeeded({ session, options: {} }, 'context-overflow', signal)`
+  —— 用 `'context-overflow'` 是因为它会**强制**做出有用的压缩（`'pressure'` 可能在阈值下空转）。
+- **纪律**：每 session **最多一次**（`compacted` 集合）；**不 await** 在驱动路径上（不阻塞 turn）；
+  结果与失败**都要记日志** —— `status.compacted`（含 `shadowedSeqs` / `shadowedTokens`）、
+  `status.compact-failed`、以及**服务缺失时显式记** `status.compact-skip: no-compaction-service`
+  （R5 精神：宁可明说，绝不静默什么都不做）；任何异常都不得冒泡进 driver。
+- **默认关（`autoCompact: false`）且这是刻意的**：压缩会**真实调用一次摘要模型**，属于用户账户上的
+  额外付费调用（AGENTS.md §1），所以必须由用户显式打开。打开方式：把本 bundle patch 里的
+  `autoCompact` 设为 `true` 并重载。
+- **诚实标注**：M9 的效果**尚未在真实会话中观测到**（需要用户开启后跑一次：预期在 turn 结束后
+  agent idle 时出现 `status.compacted`，且**下一个 turn 的模型输出不再模仿坏样本**）。
+  另需注意：它清理的是**区间**，若压缩实现判定"没有安全且有用的区间"会返回 `null`（此时记
+  `compacted:false`），这属于正常结果，不是缺陷。

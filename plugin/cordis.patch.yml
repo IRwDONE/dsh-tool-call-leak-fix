@@ -18,7 +18,10 @@
         noopCheck: true
         # R10 diagnostic switch: default OFF. Turn it on temporarily (then reload)
         # to capture a real silent-failure, e.g. while validating R11.
-        debugLog: false
+        # TEMPORARY (lead, 2026-10-31 18:58): ON to capture the next fork attempt
+        # (session/event.scan + turn-stopping.injected + pre-step.forkBrief).
+        # Set back to false once the field check is done.
+        debugLog: true
         # R12/M5 is deliberately NOT exposed here: it cannot work on this harness
         # build (D-8 — agent-loop hands llm/stream a deep-frozen request), so its
         # wiring and its switch were removed. Only the implementation is kept, in
@@ -27,3 +30,10 @@
         # briefing before its first step, marking the inherited damaged call
         # markup as invalid (that history cannot be rewritten — D-8).
         forkBrief: true
+        # R18/M9 idle compaction: when a poisoned session (a fork, or one where a
+        # damaged step was detected) goes idle, ask the harness to compact that
+        # history into one summary node — the only reachable way to stop the model
+        # replaying/imitation the damaged samples (D-8 blocks rewriting history).
+        # DELIBERATELY OFF: a compaction run is a real summarisation call on your
+        # account. Turn it on when you want a poisoned conversation cleaned.
+        autoCompact: false

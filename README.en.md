@@ -68,6 +68,7 @@ Three guards, each one silent until something is actually wrong:
 3. **Self-heal (M4)** — watch committed assistant messages. If a step's output is damaged **and** that step produced **no tool call**, then at the moment the turn is about to close, inject a correction so the turn stays open and the model re-issues the call. This is the mechanism aimed at the example in §1.
    It is **two-tier, and bounded**: the first correction says "that step did not run — here is how to retry"; if the very next step is damaged **again** (which really happened in a live session), one **shorter, harder** instruction follows — "this step: issue exactly one call, keep it under 40 lines, add no explanation". The cap is `maxCorrectionsPerTurn` (this bundle ships `2`); at the cap it stops instead of looping.
 4. **Fork brief (M7)** — a **forked session inherits the parent's history**, and forking is exactly what you do after a failure. That history cannot be rewritten (frozen request, D-8), but the plugin can place **one code-generated briefing before the fork's first model step**: stray call markup with **no matching tool card** is declared **damaged and never executed** — ignore it, do not imitate it, and re-issue calls in small chunks. **Once per session**; zero overhead for sessions that are not forks.
+5. **Idle compaction (M9)** — the four mechanisms above only *correct on the spot*; the damaged samples already written into the history are still replayed verbatim and imitated (live evidence: after one correction the model dumped **9168 characters** of broken prose). Rewriting history is impossible here (D-8/M5) — **but the harness has its own way**: `ctx.compaction.compactIfNeeded(..., 'context-overflow', ...)` *forces* a useful reduction that **replaces the selected span with one summary node**. So when a poisoned session goes **idle**, the plugin asks the harness to compact it once, and the damaged samples stop being replayed. **Off by default** (a compaction run is a real summarisation call on your account); once per session; failures and skips are logged.
 
 **Deliberately not done**: **no prompt injection at all** (a system-prompt rule block was implemented and later **removed by design decision** — prompt-level rules are not enforceable and cost attention), and no forced small-chunk write tool.
 
@@ -138,6 +139,7 @@ The row's `config` is **validated and normalised**; invalid values **fall back t
 | `contextGuardNote` | `''` | **internal, not wired** |
 | `forkBrief` | `true` | **R16 (M7)**: a forked session gets one "session brief" **before its first step**, marking the inherited damaged artifacts as invalid. Set `false` to disable |
 | `forkBriefNote` | `''` | **R16**: briefing text; empty ⇒ the built-in localized text |
+| `autoCompact` | `false` | **R18 (M9)**: when a poisoned session (a fork, or one where a damaged step was detected) goes **idle**, ask the harness to compact it once, replacing that span with a single summary node. **Off by default**: a compaction run is a real summarisation call on your account; set `true` to enable |
 
 ## 6. Verified vs. not verified
 
@@ -173,7 +175,7 @@ Verification is split deliberately: "the code does what the contract says" is pr
 
 ### 7.3 Docs and evidence
 
-- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R17), including the ones changed after evidence contradicted them.
+- `docs/INTERFACE.md` — the **frozen** detector contract and every ruling (R1–R18), including the ones changed after evidence contradicted them.
 - `docs/CONTRACTS.md` — the pre-implementation contract dig; every claim carries a file path and line number.
 - `docs/DESIGN.md` — failure taxonomy, trigger conditions, mechanism design, and the corrections made after measurement.
 - `docs/PROMPTS.md` — the prevention/correction/denial texts, kept even though the plugin no longer injects any prompt (available for manual use).
