@@ -1,6 +1,6 @@
 {
   "name": "@irwdone/dsh-structured-output-guard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Detects tool-call argument boundary loss in assistant output, denies damaged calls, and self-heals within the same turn.",

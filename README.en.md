@@ -2,7 +2,7 @@
 
 [简体中文](README.md) | **English**
 
-> Package `@irwdone/dsh-structured-output-guard` (same name as the GitHub repo) | current version **0.2.0**.
+> Package `@irwdone/dsh-structured-output-guard` (same name as the GitHub repo) | current version **0.3.0**.
 > **How to tell the local plugin really updated**: read this bundle's version in the Plugin Manager, or look at
 > `node_modules/@irwdone/dsh-structured-output-guard/package.json` in the profile.
 

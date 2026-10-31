@@ -2,7 +2,7 @@
 
 **简体中文** | [English](README.en.md)
 
-> 包名 `@irwdone/dsh-structured-output-guard`（与 GitHub 仓库同名）｜当前版本 **0.2.0**。
+> 包名 `@irwdone/dsh-structured-output-guard`（与 GitHub 仓库同名）｜当前版本 **0.3.0**。
 > **怎么确认本地的修复真的更新了**：插件管理器里看该 bundle 的版本号；或直接看 profile 的
 > `node_modules/@irwdone/dsh-structured-output-guard/package.json`。
 
