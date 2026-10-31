@@ -296,6 +296,9 @@ export function apply(ctx, rawConfig) {
       lang: config.lang,
       maxLines: config.maxLines,
       maxCorrectionsPerTurn: config.maxCorrectionsPerTurn,
+      // Printed so a missing `pre-step.forkBrief` can never be confused with
+      // "M7 is switched off here" (R16 field check).
+      forkBrief: config.forkBrief,
     },
   });
   if (config.enabled !== true) return;
