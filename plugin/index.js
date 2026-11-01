@@ -484,10 +484,16 @@ export function apply(ctx, rawConfig) {
 
     for (const seq of Array.from(targets).slice(0, 20)) {
       try {
-        if (repairNode(session, seq)) targets.delete(seq);
-        else return; // a wrong outcome: stop mutating and keep the evidence
+        if (!repairNode(session, seq)) {
+          // A wrong outcome: keep the evidence, stop mutating, and never retry
+          // (retrying would append another note every turn).
+          state.ok = false;
+          return;
+        }
+        targets.delete(seq);
       } catch (error) {
         log({ where: 'repair.error', sessionId, seq, message: String((error && error.message) || error) });
+        state.ok = false;
         return;
       }
     }
