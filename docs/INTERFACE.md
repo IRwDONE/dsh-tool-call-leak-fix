@@ -41,11 +41,11 @@ export function sanitizeMessages(messages, opts) {}   // R12 (M5) — added 2026
   contextGuardNote: '',          // ★R12：替换注记；空串=内置中英文注记
   forkBrief: true,               // ★R16（M7）：fork 会话在首步之前注入一次"会话简报"
   forkBriefNote: '',             // ★R16：简报文本；空串=内置中英文文本
-  autoCompact: false,            // ★R18（M9）：被污染的会话在 idle 时交给 harness 压缩（默认关：会产生一次摘要调用）
+  repairContext: true,           // ★R19（M9）：把损坏的 assistant 步骤在 surface 上遮蔽并替换成说明（零模型调用）
 }
 ```
 
-**共 15 个键**（R9 后 8 个，R10 再 +2，R12 再 +2，R16 再 +2，R18 再 +1）。`mergeConfig(partial)` → 新对象，缺字段用默认值补齐；非法值回退默认。
+**共 15 个键**（R9 后 8 个，R10 再 +2，R12 再 +2，R16 再 +2，R19 再 +1）。`mergeConfig(partial)` → 新对象，缺字段用默认值补齐；非法值回退默认。
 测试请**从 `DEFAULT_CONFIG` 推导键集合**，不要硬编码字符串。
 
 **裁定 R10（2026-10-28）—— 诊断日志开关：**
@@ -435,7 +435,14 @@ silentFailure === (damaged === true && meta?.hasToolCalls === false)
   `S3`（fixture 一致性）三条断言 —— 覆盖**只增不减**。
 - **护栏**：以代码块起头的引用、以散文起头的讲解，均**不误报**（S2/S3 与既有反例覆盖）。
 
-**裁定 R18（2026-11-01）—— M9「闲置压缩」：把被污染的历史交给 harness 自己压掉**
+**裁定 R18（2026-11-01）—— M9 初版「闲置压缩」：把被污染的历史交给 harness 自己压掉**
+
+> ⚠️ **本裁定已被 R19 取代（同日）。** 原因：契约（`ctx.compaction`）**存在**，但在这台 harness 上
+> **服务没有被挂载** —— 两条独立实测：① 激活时刻与事件时刻 `ctx.get('compaction')` 都是 `false`；
+> ② 对照组 `commands` / `llm` / `tools` / `agentLoop` / `systemPrompt` 都是 `true`（证明取法正确），
+> 且**全局作用域与 agent 作用域**都取不到。全语料里也**从未出现过 `compaction/` 事件**。
+> 因此本裁定描述的机制**在本 build 上不可达**：`autoCompact` 键已删除，改用 R19 的 `repairContext`。
+> 以下保留为审计记录（记录我们如何走到 R19）。
 
 - **它要解决的现场**：一次真实 fork（`session-c4f8b81c`，turn 27）里，插件的每一环**都执行了**
   （`session/event.scan` 命中 → tier 1 注入 → 又写坏 → tier 2 注入 → turn 结束），
@@ -466,3 +473,37 @@ silentFailure === (damaged === true && meta?.hasToolCalls === false)
   agent idle 时出现 `status.compacted`，且**下一个 turn 的模型输出不再模仿坏样本**）。
   另需注意：它清理的是**区间**，若压缩实现判定"没有安全且有用的区间"会返回 `null`（此时记
   `compacted:false`），这属于正常结果，不是缺陷。
+
+---
+
+**裁定 R19（2026-11-01）—— M9 定版「surface 修复」：把损坏的步骤从模型可见面上遮蔽掉**
+
+- **目标（用户口径）**：fork 出去之后，插件要能**完整而 robust 地修复损坏上下文**，而不只是"当场纠正"。
+  前几轮证据表明：损坏步骤一旦进入历史，模型就会**持续模仿**它（真实会话：纠正之后仍吐出
+  2845 / **9168** / 271 字符的损坏正文，且每次失败的**重试又往历史里塞一个新坏样本**）。
+- **为什么是这条缝**：① 改写模型可见历史在 `llm/stream` **不可达**（D-8，冻结请求）；
+  ② compaction 服务在本 build **未挂载**（R18 已证伪）。剩下的唯一可达、且**零模型调用**的写入口，
+  是会话自身的 **surface 替换**：`session.append(type, data, { surfaceOp: { op:'replace', startSeq, endSeq } })`
+  —— harness 的 compaction 内部用的正是同一机制（"replaces the selected surface span with one summary node"）。
+  契约取自 typert 的 `Session` / `SurfaceIntent` / `SurfaceOp` 声明，**不是猜的**（D-12 教训）。
+- **做法**：把被判为 `silentFailure`（**损坏 且 该步 `toolCallCount === 0`**）的 assistant 步骤在 surface 上
+  **遮蔽**，并**用一个 `user/message` 说明节点替换它**：
+  「此处原本是一步损坏的模型输出（调用标记泄漏到正文、且没有任何工具调用），现已作废……」
+  日志里的原始事件**仍然保留**（只是被 shadow）⇒ **可审计、且不可被伪造**。
+- **触发与范围**：在 `agent/turn-stopping`（M4 已在同一缝做 append，安全性有实证）执行，
+  **先修复、后注入纠正**。两类目标：① 本 turn 由 `session/event` 观察到的损坏节点（按 `seq` 记下）；
+  ② **fork 继承来**的损坏节点——它们不进我们的事件流，因此**每 session 扫一次 surface**：
+  只扫 `!session.isOwnSeq(seq)` 的节点，上限 2000，触顶时日志记 `capped:true`（诚实标注，不静默截断）。
+- **自验证（本裁定的核心安全设计）**：`surfaceOp.replace` 的语义**在语料里没有任何真实样例**
+  （全语料只有 `surfaceOp:"append"`），所以**绝不拿真实消息去试**：
+  先用**自建探针节点**自检一次（append 探针 → 用 replace 遮蔽它 → 检查 surface 中探针消失、替换节点在列）。
+  **自检失败 ⇒ 整个 session 故障关闭**（记 `repair.selfTest{ok:false}`，不再碰任何真实节点）。
+  每次真实替换之后**再验证一次**：目标 `seq` 必须离开 surface、说明节点必须在列；否则记 `repair.unverified`
+  并**立刻停止后续修改**（保留现场，而不是继续盲改）。
+- **有界**：每 session 自检 1 次；每次 turn-stopping 最多处理 20 个目标；继承扫描 1 次、上限 2000 节点。
+- **代价**：**零模型调用**（说明节点是静态文本，不是摘要）。
+- **诚实标注**：① **harness 侧语义仍需现场验证**——自检通过/失败、真实替换是否生效，只有在**一次真实损坏**
+  发生后才看得到（`repair.selfTest` / `repair.applied` / `repair.unverified`）；
+  ② 遮蔽**不等于删除日志**：这是有意为之（审计面与模型可见面分离）；
+  ③ 它修的是**模型可见面**，不是模型本身——若在**干净**历史上模型仍写坏，那属于模型侧问题
+  （已有 D-10 / D-11 / D-13 检出 + tier1/tier2 纠正兜住）。

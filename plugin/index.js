@@ -299,8 +299,7 @@ export function apply(ctx, rawConfig) {
       // Printed so a missing `pre-step.forkBrief` can never be confused with
       // "M7 is switched off here" (R16 field check).
       forkBrief: config.forkBrief,
-      // Printed so a silent M9 (R18) can never be confused with "switched off".
-      autoCompact: config.autoCompact,
+      repairContext: config.repairContext,
     },
   });
   if (config.enabled !== true) return;
@@ -358,9 +357,142 @@ export function apply(ctx, rawConfig) {
   /* M4 — observe committed assistant messages, then self-heal at turn close. */
   const pending = new Map();
   const corrections = new Map();
-  // R18 (M9): sessions whose history looks poisoned, and those already cleaned.
-  const poisoned = new Set();
-  const compacted = new Set();
+
+  /* M9 — R19 surface repair. A damaged step is shadowed on the model-visible
+     surface so the model stops replaying and imitating it. This is the only
+     reachable repair: llm/stream gets a frozen request (D-8), and the compaction
+     service is not mounted in this profile (verified at global and agent scope).
+     It costs no model call. */
+  const damagedSeqs = new Map(); // sessionId -> Set<SessionSeq>
+  const repairState = new Map(); // sessionId -> { tested, ok, scanned }
+
+  /** One assistant event judged: text, tool-call count, damage verdict. */
+  function judgeAssistantEvent(event) {
+    if (!event || event.type !== 'assistant/message') return null;
+    const data = event.data;
+    const message = data && data.message;
+    if (!message || message.role !== 'assistant') return null;
+    const blocks = Array.isArray(message.content) ? message.content : [];
+    let text = '';
+    let toolCallCount = 0;
+    for (const block of blocks) {
+      if (!block || typeof block !== 'object') continue;
+      if (block.type === 'text' && typeof block.text === 'string') text += block.text;
+      else if (block.type === 'tool-call') toolCallCount += 1;
+    }
+    return {
+      data,
+      blocks,
+      text,
+      toolCallCount,
+      scan: scanAssistantText(text, config, { hasToolCalls: toolCallCount > 0, toolCallCount }),
+    };
+  }
+
+  function noteDamaged(sessionId, seq) {
+    if (!sessionId || typeof seq !== 'number') return;
+    let set = damagedSeqs.get(sessionId);
+    if (!set) {
+      set = new Set();
+      damagedSeqs.set(sessionId, set);
+    }
+    set.add(seq);
+  }
+
+  function repairNoteText() {
+    return config.lang === 'en'
+      ? '[Context repair] This step used to hold DAMAGED model output (call markup leaked into the text with no tool call). It is void: do not imitate it, and re-issue the call in small chunks when needed.'
+      : '【上下文修复】此处原本是一步**损坏的模型输出**（调用标记泄漏到正文、且没有任何工具调用），现已作废。请不要模仿它；需要时用小块重新发起调用。';
+  }
+
+  /**
+   * Verify `surfaceOp.replace` on our OWN probe node before touching real
+   * history. The probe is shadowed by its replacement, so it leaves no visible
+   * trace while the replacement carries the repair note — a wrong reading of the
+   * op costs one benign node, never a real message.
+   */
+  function selfTestSurface(session) {
+    const note = repairNoteText();
+    const probe = session.append('user/message', pluginMessage('（surface replace 自检）', SOURCE_RUNTIME_CONTEXT), {
+      surfaceOp: 'append',
+    });
+    const swap = session.append('user/message', pluginMessage(note, SOURCE_RUNTIME_CONTEXT), {
+      surfaceOp: { op: 'replace', startSeq: probe.seq, endSeq: probe.seq },
+    });
+    const nodes = session.surface.nodes;
+    return { ok: !nodes.includes(probe.seq) && nodes.includes(swap.seq), probe: probe.seq, swap: swap.seq };
+  }
+
+  /** Shadow one damaged node; verify it left the surface. False ⇒ fail closed. */
+  function repairNode(session, seq) {
+    const note = repairNoteText();
+    const appended = session.append('user/message', pluginMessage(note, SOURCE_RUNTIME_CONTEXT), {
+      surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
+    });
+    const nodes = session.surface.nodes;
+    const ok = !nodes.includes(seq) && nodes.includes(appended.seq);
+    log({ where: ok ? 'repair.applied' : 'repair.unverified', seq, appendedSeq: appended.seq });
+    return ok;
+  }
+
+  function repairSession(agent, sessionId) {
+    const session = agent && agent.session;
+    if (!session || typeof session.append !== 'function' || !session.surface) return;
+    let state = repairState.get(sessionId);
+    if (!state) {
+      state = { tested: false, ok: false, scanned: false };
+      repairState.set(sessionId, state);
+    }
+
+    // Once per session: a fork's inherited steps never reach our event feed, so
+    // look for damaged ones on the surface itself.
+    if (!state.scanned) {
+      state.scanned = true;
+      try {
+        const nodes = session.surface.nodes;
+        const cap = 2000;
+        let inherited = 0;
+        for (let i = Math.max(0, nodes.length - cap); i < nodes.length; i += 1) {
+          const seq = nodes[i];
+          if (session.isOwnSeq(seq)) continue; // own damage arrives via the observer
+          inherited += 1;
+          const judge = judgeAssistantEvent(session.eventAt(seq));
+          if (judge && judge.scan.damaged === true && judge.toolCallCount === 0) noteDamaged(sessionId, seq);
+        }
+        log({ where: 'repair.scanned', sessionId, surfaceNodes: nodes.length, inherited, capped: nodes.length > cap });
+      } catch {
+        /* observation only */
+      }
+    }
+
+    const targets = damagedSeqs.get(sessionId);
+    if (!targets || targets.size === 0) return;
+
+    if (!state.tested) {
+      state.tested = true;
+      let result = { ok: false };
+      try {
+        result = selfTestSurface(session);
+      } catch (error) {
+        log({ where: 'repair.selfTest.error', sessionId, message: String((error && error.message) || error) });
+      }
+      state.ok = result.ok === true;
+      log({ where: 'repair.selfTest', sessionId, ok: state.ok, probe: result.probe, swap: result.swap });
+      if (!state.ok) return; // fail closed for this session, never silently
+    }
+    if (state.ok !== true) return;
+
+    for (const seq of Array.from(targets).slice(0, 20)) {
+      try {
+        if (repairNode(session, seq)) targets.delete(seq);
+        else return; // a wrong outcome: stop mutating and keep the evidence
+      } catch (error) {
+        log({ where: 'repair.error', sessionId, seq, message: String((error && error.message) || error) });
+        return;
+      }
+    }
+  }
+
 
   install(ctx, () =>
     ctx.on('session/event', (...args) => {
@@ -377,29 +509,13 @@ export function apply(ctx, rawConfig) {
           eventKeys: event && typeof event === 'object' ? Object.keys(event) : null,
           dataKeys: event && event.data && typeof event.data === 'object' ? Object.keys(event.data) : null,
         });
-        if (!event || event.type !== 'assistant/message') return;
-        const data = event.data;
-        if (!data || typeof data !== 'object') return;
-        const message = data.message;
-        if (!message || message.role !== 'assistant') return;
-
-        const blocks = Array.isArray(message.content) ? message.content : [];
-        let text = '';
-        let toolCallCount = 0;
-        for (const block of blocks) {
-          if (!block || typeof block !== 'object') continue;
-          if (block.type === 'text' && typeof block.text === 'string') text += block.text;
-          else if (block.type === 'tool-call') toolCallCount += 1;
-        }
+        const judge = judgeAssistantEvent(event);
+        if (!judge) return;
+        const { data, blocks, text, toolCallCount, scan } = judge;
 
         const sessionId = session && typeof session.id === 'string' ? session.id : '';
         if (!sessionId) return;
         const turn = typeof data.turn === 'number' ? data.turn : -1;
-
-        const scan = scanAssistantText(text, config, {
-          hasToolCalls: toolCallCount > 0,
-          toolCallCount,
-        });
 
         log({
           where: 'session/event.scan',
@@ -422,6 +538,8 @@ export function apply(ctx, rawConfig) {
             findings: scan.findings,
             codes: scan.findings.map((finding) => finding && finding.code).filter(Boolean),
           });
+          // M9: remember this surface node so it can be shadowed at turn close.
+          if (typeof event.seq === 'number') noteDamaged(sessionId, event.seq);
         } else {
           const previous = pending.get(sessionId);
           if (previous && previous.turn === turn) pending.delete(sessionId);
@@ -462,6 +580,11 @@ export function apply(ctx, rawConfig) {
         });
 
         if (!sessionId) return;
+
+        // M9 — repair the damaged context BEFORE the correction, so the model
+        // (and the next turn) reads a clean note instead of the broken markup.
+        if (config.repairContext === true) repairSession(agent, sessionId);
+
         if (!record || record.turn !== payload.turn) return;
         if (count >= config.maxCorrectionsPerTurn) return;
 
@@ -508,9 +631,6 @@ export function apply(ctx, rawConfig) {
 
         corrections.set(sessionId, { turn: payload.turn, count: tier });
         pending.delete(sessionId);
-        // R18: a damaged step just entered this history. If `autoCompact` is on,
-        // the harness will summarise the poisoned span away once the agent idles.
-        poisoned.add(sessionId);
       } catch {
         /* serial dispatch propagates listener errors into the turn: swallow. */
       }
@@ -594,82 +714,11 @@ export function apply(ctx, rawConfig) {
           seeded: head.seeded,
           textLength: noteText.length,
         });
-        // R18: a fork's inherited history is exactly the poisoned span.
-        poisoned.add(sessionId);
         // Spread so fields such as `startsRequestSeries` survive (practices.md).
         const messages = Array.isArray(decision.messages) ? decision.messages : [];
         return { ...decision, messages: [note, ...messages] };
       } catch {
         return decision;
-      }
-    }),
-  );
-
-  /* M9 — R18 idle compaction (2026-11-01).
-     The one available lever for the *poisoned history* problem. We cannot
-     rewrite the model-visible history (D-8/M5: the llm/stream request is
-     frozen), but the harness can: `compaction.compactIfNeeded(..., 'context-overflow', ...)`
-     "may force a useful balanced reduction even below the normal threshold", and
-     a successful run "replaces the selected surface span with one summary node"
-     (Service contract, verified via cordis_inspect_query — not assumed; D-12).
-     So once a poisoned session goes idle, its damaged steps stop being replayed
-     verbatim and the model stops imitating them.
-     OFF by default (`autoCompact`): a compaction run is a real summarisation call
-     on the user's account. Bounded to once per session; never awaited on the
-     driver's path; every failure is logged instead of silently swallowed. */
-  install(ctx, () =>
-    ctx.on('agent/status', function statusChanged(payload) {
-      try {
-        if (config.autoCompact !== true) return;
-        const agent = payload && payload.agent;
-        const sessionId = agent && typeof agent.id === 'string' ? agent.id : '';
-        if (!sessionId || payload.status !== 'idle') return;
-        if (!poisoned.has(sessionId) || compacted.has(sessionId)) return;
-        const compaction = typeof ctx.get === 'function' ? ctx.get('compaction') : undefined;
-        if (!compaction || typeof compaction.compactIfNeeded !== 'function') {
-          // Honest miss (R5 spirit): say so instead of doing nothing quietly.
-          log({ where: 'status.compact-skip', sessionId, reason: 'no-compaction-service' });
-          return;
-        }
-        const session = agent.session;
-        if (!session) {
-          log({ where: 'status.compact-skip', sessionId, reason: 'no-session' });
-          return;
-        }
-        compacted.add(sessionId);
-        let abort;
-        try {
-          abort = new AbortController().signal;
-        } catch {
-          return;
-        }
-        Promise.resolve(
-          compaction.compactIfNeeded({ session, options: {} }, 'context-overflow', abort),
-        ).then(
-          (outcome) => {
-            log({
-              where: 'status.compacted',
-              sessionId,
-              compacted: Boolean(outcome),
-              shadowedSeqs: outcome && Array.isArray(outcome.shadowedSeqs) ? outcome.shadowedSeqs.length : 0,
-              shadowedTokens:
-                outcome && typeof outcome.shadowedTokenCount === 'number' ? outcome.shadowedTokenCount : 0,
-            });
-          },
-          (error) => {
-            log({
-              where: 'status.compact-failed',
-              sessionId,
-              message: String((error && error.message) || error),
-            });
-          },
-        );
-      } catch (error) {
-        try {
-          log({ where: 'status.compact-failed', message: String((error && error.message) || error) });
-        } catch {
-          /* observation only: never propagate into the driver */
-        }
       }
     }),
   );

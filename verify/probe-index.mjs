@@ -16,7 +16,7 @@
  * It needs no DSH runtime and installs nothing. Tag tokens are assembled from
  * fragments so this source cannot itself become a payload.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, unlinkSync } from 'node:fs';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
@@ -73,6 +73,7 @@ const CORE_EVENTS = [
   'session/event',
   'agent/turn-stopping',
   'agent/pre-step', // R16 / M7 fork brief
+  'agent/status',   // R18 / M9 idle compaction
 ];
 const OPTIONAL_EVENTS = ['llm/stream'];
 const ALLOWED_EVENTS = [...CORE_EVENTS, ...OPTIONAL_EVENTS];
@@ -209,8 +210,10 @@ section('2. apply(): Config read + effect-based registration (M1 removed)');
 {
   /* Static guards: no prompt-layer code may remain in index.js. */
   const code = idxSrc.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/gm, '$1 ');
-  check('M1-removed (static): no systemPrompt reference in index.js code',
-    !/systemPrompt/.test(code));
+  /* The invariant is "no prompt-layer USE", not "the word never appears": the
+   * M9/R18 mount probe legitimately lists 'systemPrompt' among service names. */
+  check('M1-removed (static): no systemPrompt SERVICE USE in index.js code',
+    !/(?:^|[^.\w])ctx\.systemPrompt\b/.test(code) && !/\bsystemPrompt\s*\.\s*section\b/.test(code));
   check('M1-removed (static): no PREVENTION_TEXT / preventionText left',
     !/PREVENTION_TEXT|preventionText/.test(code));
   check('M1-removed (static): the A-block prompt text is not hardcoded in index.js',
@@ -826,6 +829,185 @@ section('6c. R16/M7 fork brief (agent/pre-step)');
     check('R16 exception(' + label + '): next() once, original decision returned, no throw',
       nextCalls === 1 && ret && ret.kind === 'enter' && ret === enter,
       'nextCalls=' + nextCalls + ' ret=' + JSON.stringify(ret));
+  }
+}
+
+section('6d. R18/M9 idle compaction (agent/status)');
+{
+  const LOG = path.join(os.tmpdir(), 'guard-probe-compact.log');
+  const resetLog = () => { try { unlinkSync(LOG); } catch { /* absent */ } };
+  const wait = () => new Promise((r) => setTimeout(r, 25));
+  const logText = () => { try { return readFileSync(LOG, 'utf8'); } catch { return ''; } };
+
+  const makeCtx = (compaction) => {
+    const handlers = new Map();
+    const ctx = {
+      systemPrompt: { section() { return () => {}; } },
+      tools: {},
+      get(name) { return name === 'compaction' ? compaction : undefined; },
+      on(name, listener) { handlers.set(name, listener); return () => {}; },
+      effect(fn) { fn(); },
+    };
+    return { ctx, handlers };
+  };
+  /* Poison a session the way production does: one M4 correction. */
+  const poison = (handlers, sessionId) => {
+    handlers.get('session/event')({ id: sessionId }, {
+      type: 'assistant/message',
+      data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: v1Text }] } },
+    });
+    handlers.get('agent/turn-stopping')({ agent: { id: sessionId, inject: () => {} }, turn: 1 });
+  };
+
+  /* (a) OFF by default: a poisoned, idle session triggers nothing. */
+  {
+    resetLog();
+    const calls = [];
+    const { ctx, handlers } = makeCtx({ compactIfNeeded: (...a) => { calls.push(a); return Promise.resolve(null); } });
+    mod.apply(ctx, { debugLog: true, debugLogPath: LOG });
+    poison(handlers, 'm9-off');
+    handlers.get('agent/status')({ agent: { id: 'm9-off', session: {} }, status: 'idle' });
+    await wait();
+    check('M9: autoCompact:false => compactIfNeeded is never called', calls.length === 0, 'calls=' + calls.length);
+    check('M9: autoCompact:false => nothing is logged as compacted', !logText().includes('status.compacted'));
+  }
+  /* (b) ON: idle + poisoned => exactly one call, documented shape, logged result. */
+  {
+    resetLog();
+    const calls = [];
+    const session = { marker: 'session-object' };
+    const compaction = {
+      compactIfNeeded: (...a) => { calls.push(a); return Promise.resolve({ shadowedSeqs: [1, 2], shadowedTokenCount: 42 }); },
+    };
+    const { ctx, handlers } = makeCtx(compaction);
+    mod.apply(ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
+    poison(handlers, 'm9-on');
+    const agent = { id: 'm9-on', session };
+    handlers.get('agent/status')({ agent, status: 'running' });
+    await wait();
+    check('M9: non-idle status => no compaction call', calls.length === 0, 'calls=' + calls.length);
+    handlers.get('agent/status')({ agent, status: 'idle' });
+    await wait();
+    check('M9: idle + poisoned => exactly one call', calls.length === 1, 'calls=' + calls.length);
+    if (calls.length === 1) {
+      const [arg0, trigger, signal] = calls[0];
+      check('M9: first arg is CompactionAgentContext {session, options}',
+        !!arg0 && arg0.session === session && !!arg0.options && typeof arg0.options === 'object',
+        JSON.stringify({ keys: arg0 && Object.keys(arg0), sameSession: !!arg0 && arg0.session === session }));
+      check('M9: trigger literal is "context-overflow"', trigger === 'context-overflow', String(trigger));
+      check('M9: third arg is an AbortSignal instance', typeof AbortSignal === 'function' && signal instanceof AbortSignal);
+    }
+    check('M9: success is logged as status.compacted with shadowed counts',
+      /"where":"status\.compacted"/.test(logText()) && /"shadowedSeqs":2/.test(logText()) &&
+      /"shadowedTokens":42/.test(logText()),
+      JSON.stringify(logText().split('\n').filter((l) => l.includes('compacted')).slice(-1)));
+    const before = calls.length;
+    handlers.get('agent/status')({ agent, status: 'idle' });
+    await wait();
+    check('M9: at most once per session', calls.length === before, 'calls=' + calls.length);
+  }
+  /* (c) compaction service missing => no throw + an explicit skip record (R5 spirit). */
+  {
+    resetLog();
+    let threw = false;
+    const { ctx, handlers } = makeCtx(undefined);
+    mod.apply(ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
+    poison(handlers, 'm9-skip');
+    try { handlers.get('agent/status')({ agent: { id: 'm9-skip', session: {} }, status: 'idle' }); } catch { threw = true; }
+    await wait();
+    check('M9: missing compaction service does not throw', !threw);
+    check('M9: missing service is reported as status.compact-skip / no-compaction-service',
+      /"where":"status\.compact-skip"/.test(logText()) && /no-compaction-service/.test(logText()),
+      JSON.stringify(logText().slice(-220)));
+  }
+  /* (d) service present but agent.session missing => skip logged, no call. */
+  {
+    resetLog();
+    const calls = [];
+    const { ctx, handlers } = makeCtx({ compactIfNeeded: (...a) => { calls.push(a); return Promise.resolve(null); } });
+    mod.apply(ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
+    poison(handlers, 'm9-nosession');
+    handlers.get('agent/status')({ agent: { id: 'm9-nosession' }, status: 'idle' });
+    await wait();
+    check('M9: missing agent.session => no call + status.compact-skip / no-session',
+      calls.length === 0 && /"where":"status\.compact-skip"/.test(logText()) && /no-session/.test(logText()),
+      'calls=' + calls.length + ' log=' + JSON.stringify(logText().slice(-160)));
+  }
+  /* (e) synchronous throw => swallowed + logged; never propagated. */
+  {
+    resetLog();
+    let threw = false;
+    const sync = makeCtx({ compactIfNeeded: () => { throw new Error('sync-boom'); } });
+    mod.apply(sync.ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
+    poison(sync.handlers, 'm9-sync');
+    try { sync.handlers.get('agent/status')({ agent: { id: 'm9-sync', session: {} }, status: 'idle' }); } catch { threw = true; }
+    await wait();
+    check('M9: synchronous throw is swallowed and logged as status.compact-failed',
+      !threw && /"where":"status\.compact-failed"/.test(logText()) && /sync-boom/.test(logText()),
+      JSON.stringify(logText().slice(-200)));
+  }
+  /* (e2) rejected promise => caught by the rejection handler (never unhandled). */
+  {
+    resetLog();
+    let threw = false;
+    const rej = makeCtx({ compactIfNeeded: () => Promise.reject(new Error('async-boom')) });
+    mod.apply(rej.ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
+    poison(rej.handlers, 'm9-async');
+    try { rej.handlers.get('agent/status')({ agent: { id: 'm9-async', session: {} }, status: 'idle' }); } catch { threw = true; }
+    await wait();
+    check('M9: rejected promise is handled (not awaited) and logged as failed',
+      !threw && /"where":"status\.compact-failed"/.test(logText()) && /async-boom/.test(logText()),
+      JSON.stringify(logText().slice(-200)));
+  }
+  /* (f) the listener must not block the driver on a never-settling compaction. */
+  {
+    const { ctx, handlers } = makeCtx({ compactIfNeeded: () => new Promise(() => {}) });
+    mod.apply(ctx, { autoCompact: true });
+    poison(handlers, 'm9-noblock');
+    const t0 = Date.now();
+    const ret = handlers.get('agent/status')({ agent: { id: 'm9-noblock', session: {} }, status: 'idle' });
+    const ms = Date.now() - t0;
+    check('M9: listener returns immediately and returns undefined (does not await compaction)',
+      ms < 50 && ret === undefined, 'ms=' + ms + ' ret=' + JSON.stringify(ret));
+  }
+  /* (g) static lock on the call shape taken from the live Service contract. */
+  {
+    check('M9 interface: the call matches the live contract shape ' +
+      '(CompactionAgentContext, CompactionTrigger, AbortSignal)',
+      /ctx\.get\('compaction'\)/.test(idxSrc) &&
+      /compactIfNeeded\(\{\s*session,\s*options:\s*\{\}\s*\},\s*'context-overflow'/.test(idxSrc),
+      'source does not match the queried contract');
+  }
+  /* (h) D-12-class guard added by the owner: the mount is PROBED, never assumed —
+   * at activation (in the activation line) and once at event time. */
+  {
+    resetLog();
+    const { ctx, handlers } = makeCtx({ compactIfNeeded: () => Promise.resolve(null) });
+    mod.apply(ctx, { autoCompact: false, debugLog: true, debugLogPath: LOG });
+    check('M9/D-12 guard: activation line reports compactionService presence (true)',
+      /"compactionService":true/.test(logText()),
+      JSON.stringify(logText().split('\n')[0]));
+    const agent = { id: 'm9-probe', session: {} };
+    handlers.get('agent/status')({ agent, status: 'running' });
+    handlers.get('agent/status')({ agent, status: 'idle' });
+    const probes = logText().match(/"where":"probe\.compaction"/g) || [];
+    check('M9/D-12 guard: event-time probe logs exactly once and reports available=true',
+      probes.length === 1 && /"where":"probe\.compaction","available":true/.test(logText()),
+      JSON.stringify({ probes: probes.length, lines: logText().split('\n').filter((l) => l.includes('probe.compaction')) }));
+  }
+  {
+    resetLog();
+    const { ctx, handlers } = makeCtx(undefined);
+    mod.apply(ctx, { autoCompact: false, debugLog: true, debugLogPath: LOG });
+    check('M9/D-12 guard: activation line reports compactionService:false when unmounted',
+      /"compactionService":false/.test(logText()), JSON.stringify(logText().split('\n')[0]));
+    const agent = { id: 'm9-probe-none', session: {} };
+    handlers.get('agent/status')({ agent, status: 'idle' });
+    handlers.get('agent/status')({ agent, status: 'idle' });
+    const probes = logText().match(/"where":"probe\.compaction"/g) || [];
+    check('M9/D-12 guard: event-time probe reports available=false exactly once',
+      probes.length === 1 && /"where":"probe\.compaction","available":false/.test(logText()),
+      JSON.stringify({ probes: probes.length, lines: logText().split('\n').filter((l) => l.includes('probe.compaction')) }));
   }
 }
 

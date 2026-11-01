@@ -82,7 +82,7 @@ const CJK_PUNCT_RE = /[\u3000-\u303f\uff01-\uff5e]/;
  */
 const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR';
 
-/** @type {{enabled: boolean, maxLines: number, maxChars: number, closingTagCount: number, endSequenceRepeats: number, maxCorrectionsPerTurn: number, lang: 'zh'|'en', noopCheck: boolean, debugLog: boolean, debugLogPath: string, contextGuard: boolean, contextGuardNote: string, forkBrief: boolean, forkBriefNote: string, autoCompact: boolean}} */
+/** @type {{enabled: boolean, maxLines: number, maxChars: number, closingTagCount: number, endSequenceRepeats: number, maxCorrectionsPerTurn: number, lang: 'zh'|'en', noopCheck: boolean, debugLog: boolean, debugLogPath: string, contextGuard: boolean, contextGuardNote: string, forkBrief: boolean, forkBriefNote: string, repairContext: boolean}} */
 export const DEFAULT_CONFIG = {
   enabled: true,
   maxLines: 100,
@@ -121,12 +121,13 @@ export const DEFAULT_CONFIG = {
   /** R16: briefing text; an empty string uses the built-in localized text. */
   forkBriefNote: '',
   /**
-   * R18 (M9): when a session's history looks poisoned (it is a fork, or a
-   * degeneration was detected in it), ask the harness to compact that history
-   * once the agent goes idle. OFF by default: a compaction run is a real
-   * summarisation call on the user's account, so it is enabled deliberately.
+   * R19 (M9): repair the damaged context in place. A step judged damaged with no
+   * tool call is shadowed on the model-visible session surface (`surfaceOp.replace`)
+   * and replaced by a short note, so the model stops replaying and imitating the
+   * broken markup. Costs no model call. The replace op is self-tested on our own
+   * probe node once per session first; a failed self-test fails closed.
    */
-  autoCompact: false,
+  repairContext: true,
 };
 
 /** Non-empty string fields; anything else falls back to the default. */
@@ -166,7 +167,7 @@ function defaultCopy() {
     contextGuardNote: DEFAULT_CONFIG.contextGuardNote,
     forkBrief: DEFAULT_CONFIG.forkBrief,
     forkBriefNote: DEFAULT_CONFIG.forkBriefNote,
-    autoCompact: DEFAULT_CONFIG.autoCompact,
+    repairContext: DEFAULT_CONFIG.repairContext,
   };
 }
 
@@ -557,7 +558,7 @@ export function mergeConfig(partial) {
   try {
     if (!isPlainObject(partial)) return out;
 
-    for (const key of ['enabled', 'noopCheck', 'debugLog', 'contextGuard', 'forkBrief', 'autoCompact']) {
+    for (const key of ['enabled', 'noopCheck', 'debugLog', 'contextGuard', 'forkBrief', 'repairContext']) {
       let value;
       try {
         value = partial[key];

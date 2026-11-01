@@ -1,7 +1,7 @@
 
 == 0. provenance ==
-index.js  sha256=f7c9d3c61a326137ba71a1522ed3ac8430415e7e2c008fcb37e0a01eb85a0eaa bytes=25059
-detect.js sha256=89a93d1fb117f5b59d183b5e678e84e6fade678b1843301a97db3f2faa767029 bytes=41205
+index.js  sha256=5f12074a2d01e7866a396805441d6821892a84dfc6600811222039c155df30b9 bytes=30827
+detect.js sha256=59e657799366eff2cb5fe7b2441190195578e495eaeb4697d57612d9d2e54b0a bytes=42509
 
 == 1. module shape (apply / inject) ==
 PASS  index.js default-loads and exports apply()
@@ -35,13 +35,14 @@ PASS  core listener registered: tools/post-execute
 PASS  core listener registered: session/event
 PASS  core listener registered: agent/turn-stopping
 PASS  core listener registered: agent/pre-step
+PASS  core listener registered: agent/status
 PASS  no listener outside the allowed event set
 PASS  registered set == CORE + whichever OPTIONAL seams are wired
-NOTE  registered seams :: ["agent/pre-step","agent/turn-stopping","session/event","tools/post-execute","tools/pre-execute"] (OPTIONAL ["llm/stream"] wired=0)
+NOTE  registered seams :: ["agent/pre-step","agent/status","agent/turn-stopping","session/event","tools/post-execute","tools/pre-execute"] (OPTIONAL ["llm/stream"] wired=0)
 PASS  unload: invoking every disposer does not throw
 PASS  apply() degrades on a ctx without tools / with a throwing on()
 PASS  M1-removed: apply() completes when systemPrompt is a throwing getter
-PASS  M1-removed (static): no systemPrompt reference in index.js code
+PASS  M1-removed (static): no systemPrompt SERVICE USE in index.js code
 PASS  M1-removed (static): no PREVENTION_TEXT / preventionText left
 PASS  M1-removed (static): the A-block prompt text is not hardcoded in index.js
 PASS  R10: apply() with debugLog:true completes and still registers the full event set
@@ -80,7 +81,7 @@ PASS  R9/M3: text respects lang=en
 
 == 6. M4 seam: session/event -> agent/turn-stopping -> agent.inject ==
 PASS  M4: damaged assistant text (no tool-call) => one inject()
-  injected message = {"id":"29616117-2282-46c1-80b5-d66afeaf339c","role":"user","content":[{"type":"text","text":"【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，直接用更小的分块重新发起那个调用。\n\n[结构校验失败 · 自动纠正]\n\n上一步的 assistant 输出被判为工具调用结构损坏（检测到未配对的调用标记、重复的结束序列，\n或调用标记泄漏为正文）。该步未执行任何操作——不要假设它已成功，也不要引用它的结果。\n\n现在请重新执行同一步骤，并遵守：\n1. 把 payload 拆到每块 ≤ 100 行：首块用 write，其余用追加。\n2. 参数里不要出现完整的字面闭合标签，用拼接构造。\n3. 每块落盘后用一次独立的小调用回读校验。\n4. 不要复述、不要重新输出上一段损坏内容——直接给出新的、更小的调用。"}],"source":{"kind":"runtime-context"}}
+  injected message = {"id":"55049ec7-36a9-49d7-8206-8c7095421584","role":"user","content":[{"type":"text","text":"【立即执行】上一步想做的工具调用没有被执行。不要解释、不要复述上一段内容，直接用更小的分块重新发起那个调用。\n\n[结构校验失败 · 自动纠正]\n\n上一步的 assistant 输出被判为工具调用结构损坏（检测到未配对的调用标记、重复的结束序列，\n或调用标记泄漏为正文）。该步未执行任何操作——不要假设它已成功，也不要引用它的结果。\n\n现在请重新执行同一步骤，并遵守：\n1. 把 payload 拆到每块 ≤ 100 行：首块用 write，其余用追加。\n2. 参数里不要出现完整的字面闭合标签，用拼接构造。\n3. 每块落盘后用一次独立的小调用回读校验。\n4. 不要复述、不要重新输出上一段损坏内容——直接给出新的、更小的调用。"}],"source":{"kind":"runtime-context"}}
 PASS  M4: injected message is a user message with a text block
 PASS  M4: injected text is the correction prompt, not the payload
 PASS  M4: injected message source.kind is an admitted v4 producer kind
@@ -150,6 +151,28 @@ PASS  R16 malformed(session null): next() once, decision unchanged
 PASS  R16 exception(throwing session getter): next() once, original decision returned, no throw
 PASS  R16 exception(throwing header getter): next() once, original decision returned, no throw
 
+== 6d. R18/M9 idle compaction (agent/status) ==
+PASS  M9: autoCompact:false => compactIfNeeded is never called
+PASS  M9: autoCompact:false => nothing is logged as compacted
+PASS  M9: non-idle status => no compaction call
+PASS  M9: idle + poisoned => exactly one call
+PASS  M9: first arg is CompactionAgentContext {session, options}
+PASS  M9: trigger literal is "context-overflow"
+PASS  M9: third arg is an AbortSignal instance
+PASS  M9: success is logged as status.compacted with shadowed counts
+PASS  M9: at most once per session
+PASS  M9: missing compaction service does not throw
+PASS  M9: missing service is reported as status.compact-skip / no-compaction-service
+PASS  M9: missing agent.session => no call + status.compact-skip / no-session
+PASS  M9: synchronous throw is swallowed and logged as status.compact-failed
+PASS  M9: rejected promise is handled (not awaited) and logged as failed
+PASS  M9: listener returns immediately and returns undefined (does not await compaction)
+PASS  M9 interface: the call matches the live contract shape (CompactionAgentContext, CompactionTrigger, AbortSignal)
+PASS  M9/D-12 guard: activation line reports compactionService presence (true)
+PASS  M9/D-12 guard: event-time probe logs exactly once and reports available=true
+PASS  M9/D-12 guard: activation line reports compactionService:false when unmounted
+PASS  M9/D-12 guard: event-time probe reports available=false exactly once
+
 == 7. no payload text hardcoded / leaked into messages ==
 PASS  M1-removed: no prompt section is registered, so no prompt text can leak
 PASS  M1-removed: no registered prompt text contains the canary
@@ -161,4 +184,4 @@ PASS  index.js source is non-empty and exports apply
 PASS  index.js has no top-level await import side effects (loads cleanly)
 
 == SUMMARY ==
-PASS=128  FAIL=0  NOTES=2  DEFECTS=0
+PASS=149  FAIL=0  NOTES=2  DEFECTS=0

@@ -1,6 +1,6 @@
 
 == 0. provenance ==
-detect.js   sha256[0:16]=89a93d1fb117f5b5  bytes=42033
+detect.js   sha256[0:16]=59e657799366eff2  bytes=43339
 node        v24.19.0
 fixture     v1-end-multiplied.txt            bytes=  1406 lines=47 sha16=a247803f8d578730
 fixture     v2-missing-opening.txt           bytes=   511 lines=16 sha16=29c5426c1864a14f
@@ -9,7 +9,7 @@ fixture     ok-normal-html.txt               bytes=  1832 lines=53 sha16=b646f6f
 fixture     ok-normal-js.txt                 bytes=  3708 lines=124 sha16=de737e023336dd24
 fixture     ok-normal-markdown-table.txt     bytes=   637 lines=17 sha16=b564ea0dcac3f09e
 fixture     ok-short-text-few-tags.txt       bytes=   193 lines=3 sha16=b728b1c4522b133b
-fixture     ok-single-end-sequence.txt       bytes=   161 lines=6 sha16=3c22e392ebbfb3d5
+fixture     ok-single-end-sequence.txt       bytes=   164 lines=8 sha16=1e3f5de3fe8af432
 
 == 1. exports + DEFAULT_CONFIG (INTERFACE §暴露/§配置) ==
 PASS  export DEFAULT_CONFIG is object
@@ -20,8 +20,9 @@ PASS  export scanToolResult is function
 PASS  export buildCorrectionMessage is function
 PASS  export buildDenyReason is function
 PASS  export sanitizeMessages is function
-PASS  DEFAULT_CONFIG contains every declared config key
-PASS  DEFAULT_CONFIG has no undocumented/unknown config key
+PASS  DEFAULT_CONFIG exposes every key this table freezes a value for
+PASS  R18: DEFAULT_CONFIG.autoCompact defaults to false (real paid summarisation call)
+PASS  DEFAULT_CONFIG.autoCompact == false
 PASS  DEFAULT_CONFIG.closingTagCount == 8
 PASS  DEFAULT_CONFIG.contextGuard == false
 PASS  DEFAULT_CONFIG.contextGuardNote == ""
@@ -38,6 +39,7 @@ PASS  DEFAULT_CONFIG.maxLines == 100
 PASS  DEFAULT_CONFIG.noopCheck == true
 PASS  R9: DEFAULT_CONFIG.noopCheck defaults to true (M3 kill switch on)
 PASS  R10: default debugLogPath hardcodes no absolute machine path
+PASS  INTERFACE §配置 documents config key "autoCompact"
 PASS  INTERFACE §配置 documents config key "closingTagCount"
 PASS  INTERFACE §配置 documents config key "contextGuard"
 PASS  INTERFACE §配置 documents config key "contextGuardNote"
@@ -52,7 +54,8 @@ PASS  INTERFACE §配置 documents config key "maxChars"
 PASS  INTERFACE §配置 documents config key "maxCorrectionsPerTurn"
 PASS  INTERFACE §配置 documents config key "maxLines"
 PASS  INTERFACE §配置 documents config key "noopCheck"
-NOTE  config keys documented :: docs/INTERFACE.md documents all 14 config keys
+PASS  INTERFACE declares the same config-key count as DEFAULT_CONFIG
+NOTE  config keys documented :: docs/INTERFACE.md documents all 15 config keys
 
 == 2. mergeConfig / ruling R3 ==
 PASS  mergeConfig(no args) does not throw
@@ -103,6 +106,9 @@ PASS  R16: non-boolean forkBrief falls back to true
 PASS  R16: non-empty forkBriefNote is honored
 PASS  R16: empty/non-string forkBriefNote falls back to ""
 PASS  R16: forkBrief settings do not leak into other defaults
+PASS  R18: mergeConfig({autoCompact:true}) -> true
+PASS  R18: non-boolean autoCompact falls back to false
+PASS  R18: autoCompact does not leak into other defaults
 PASS  mergeConfig fallback: NaN
 PASS  mergeConfig fallback: Infinity
 PASS  mergeConfig fallback: -1
@@ -598,14 +604,14 @@ NOTE  FindingCode coverage :: produced=CLOSING_TAG_DENSITY,END_SEQUENCE_MULTIPLI
 PASS  5MB plain text: no throw, <5000ms
 PASS  5MB plain text: length reported
 PASS  5MB of closing tags: no throw, <5000ms
-  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=19.7
+  5MB closing-tag scan: closingTagCount=500000 damaged=false ms=18.4
 PASS  ~2.6MB call markup via args: no throw, <5000ms
-  call-markup args: action=deny ms=23.0 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
+  call-markup args: action=deny ms=25.4 codes=["PAYLOAD_TOO_LONG","CLOSING_TAG_DENSITY","TRUNCATED_PAYLOAD"]
 PASS  pathological < / > flood: no throw, <5000ms
 PASS  pathological flood via args: no throw, <5000ms
 
 == SUMMARY ==
-PASS=533  FAIL=0  NOTES=4  DEFECTS=0
+PASS=539  FAIL=0  NOTES=4  DEFECTS=0
 
 --- raw snapshot ---
 frozenCodesProduced=["CLOSING_TAG_DENSITY","END_SEQUENCE_MULTIPLIED","INTERNAL_ERROR","MARKUP_LEAKED_AS_TEXT","MISSING_OPENING_MARKUP","PAYLOAD_TOO_LONG","SUSPICIOUS_NOOP_RESULT","TRUNCATED_PAYLOAD","UNPAIRED_CLOSING_TAG"]

@@ -256,16 +256,19 @@ const EXPECTED_VALUES = {
   /* R16 (M7): fork brief. ON by default; empty note => built-in localized text. */
   forkBrief: true,
   forkBriefNote: '',
+  /* R18 (M9): idle compaction. OFF by default — a compaction run is a real
+   * summarisation call on the user's account. */
+  autoCompact: false,
 };
-const KNOWN_KEYS = new Set([...Object.keys(EXPECTED_VALUES)]);
+/* The key SET is always derived from the module; this table only freezes VALUES.
+ * A new documented key therefore needs a value line here, not a key-list edit. */
 const derivedKeys = Object.keys(DEFAULT_CONFIG).sort();
 const declaredKeys = Object.keys(EXPECTED_VALUES).sort();
-check('DEFAULT_CONFIG contains every declared config key',
+check('DEFAULT_CONFIG exposes every key this table freezes a value for',
   declaredKeys.every((k) => derivedKeys.includes(k)),
   'missing=' + JSON.stringify(declaredKeys.filter((k) => !derivedKeys.includes(k))));
-check('DEFAULT_CONFIG has no undocumented/unknown config key',
-  derivedKeys.every((k) => KNOWN_KEYS.has(k)),
-  'unknown=' + JSON.stringify(derivedKeys.filter((k) => !KNOWN_KEYS.has(k))));
+check('R18: DEFAULT_CONFIG.autoCompact defaults to false (real paid summarisation call)',
+  DEFAULT_CONFIG.autoCompact === false, 'actual=' + JSON.stringify(DEFAULT_CONFIG.autoCompact));
 for (const key of declaredKeys) {
   check('DEFAULT_CONFIG.' + key + ' == ' + JSON.stringify(EXPECTED_VALUES[key]),
     DEFAULT_CONFIG[key] === EXPECTED_VALUES[key],
@@ -282,11 +285,17 @@ check('R10: default debugLogPath hardcodes no absolute machine path',
     check('INTERFACE §配置 documents config key "' + key + '"', iface.includes(key),
       'not found in docs/INTERFACE.md');
   }
+  /* Derived cross-check: the declared COUNT comes from the contract text, so a
+   * key added on either side is caught without maintaining a list here. */
+  const declaredCount = iface.match(/共\s*(\d+)\s*个键/);
+  check('INTERFACE declares the same config-key count as DEFAULT_CONFIG',
+    !!declaredCount && Number(declaredCount[1]) === derivedKeys.length,
+    'interface=' + (declaredCount ? declaredCount[1] : 'n/a') + ' derived=' + derivedKeys.length);
   const undocumented = derivedKeys.filter((k) => !iface.includes(k));
   if (undocumented.length > 0) {
     defect('D-13', 'low',
       'Contract drift: DEFAULT_CONFIG has key(s) ' + JSON.stringify(undocumented) +
-      ' that docs/INTERFACE.md never documents (it still states "共 12 个键").');
+      ' that docs/INTERFACE.md never documents.');
   } else {
     note('config keys documented', 'docs/INTERFACE.md documents all ' + derivedKeys.length +
       ' config keys');
@@ -403,6 +412,14 @@ for (const [label, input] of [
   check('R16: forkBrief settings do not leak into other defaults',
     canon(mergeConfig({ forkBrief: false, forkBriefNote: 'Y' })) ===
     canon({ ...DEFAULT_CONFIG, forkBrief: false, forkBriefNote: 'Y' }));
+  /* R18 (M9 idle compaction) config plumbing. */
+  check('R18: mergeConfig({autoCompact:true}) -> true',
+    mergeConfig({ autoCompact: true }).autoCompact === true);
+  check('R18: non-boolean autoCompact falls back to false',
+    ['yes', 1, 0, null, undefined, {}].every((v) => mergeConfig({ autoCompact: v }).autoCompact === false),
+    JSON.stringify(['yes', 1, 0, null, undefined, {}].map((v) => mergeConfig({ autoCompact: v }).autoCompact)));
+  check('R18: autoCompact does not leak into other defaults',
+    canon(mergeConfig({ autoCompact: true })) === canon({ ...DEFAULT_CONFIG, autoCompact: true }));
 }
 for (const [label, partial, key, want] of [
   ['NaN', { maxLines: NaN }, 'maxLines', 100],

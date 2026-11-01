@@ -30,10 +30,9 @@
         # briefing before its first step, marking the inherited damaged call
         # markup as invalid (that history cannot be rewritten — D-8).
         forkBrief: true
-        # R18/M9 idle compaction: when a poisoned session (a fork, or one where a
-        # damaged step was detected) goes idle, ask the harness to compact that
-        # history into one summary node — the only reachable way to stop the model
-        # replaying/imitation the damaged samples (D-8 blocks rewriting history).
-        # DELIBERATELY OFF: a compaction run is a real summarisation call on your
-        # account. Turn it on when you want a poisoned conversation cleaned.
-        autoCompact: false
+        # R19/M9 surface repair: a step judged damaged with no tool call is
+        # SHADOWED on the model-visible session surface and replaced by a short
+        # note, so the model stops replaying and imitating the broken markup.
+        # Costs no model call. The replace op is self-tested on our own probe node
+        # once per session first; a failed self-test fails closed and is logged.
+        repairContext: true

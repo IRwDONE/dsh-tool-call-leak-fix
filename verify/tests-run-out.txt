@@ -225,5 +225,10 @@ PASS  Q1[D-11] 该步无工具调用 + 正文含结果形状标记 → damaged �
 PASS  Q2[D-11 边界] 同文本但该步确有工具调用 → damaged 仍真，silentFailure 为假（R1 挡住注入）
 PASS  Q3[D-11 护栏] 只提到字段名（无尖括号标签）不得误报
 
+== S. D-13 裸信封即泄漏（R17）：完整配平、无散文的调用信封出现在正文里 ==
+PASS  S1[D-13] 完整配平、无散文的信封 → damaged + silentFailure
+PASS  S2[D-13 护栏] 同一个信封放在代码块里（引用形式）→ 不得判 damaged
+PASS  S3[D-13 一致性] ok-single-end-sequence.txt（引用形式）仍不得判 damaged
+
 == 汇总 ==
-PASS 190 / FAIL 0
+PASS 193 / FAIL 0
