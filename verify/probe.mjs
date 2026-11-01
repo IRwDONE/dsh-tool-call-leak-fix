@@ -256,9 +256,10 @@ const EXPECTED_VALUES = {
   /* R16 (M7): fork brief. ON by default; empty note => built-in localized text. */
   forkBrief: true,
   forkBriefNote: '',
-  /* R18 (M9): idle compaction. OFF by default — a compaction run is a real
-   * summarisation call on the user's account. */
-  autoCompact: false,
+  /* R19 (M9): surface repair. ON by default — it costs no model call and is
+   * self-tested, fail-closed. (R18's compaction version was removed: the service
+   * is not mounted on this build.) */
+  repairContext: true,
 };
 /* The key SET is always derived from the module; this table only freezes VALUES.
  * A new documented key therefore needs a value line here, not a key-list edit. */
@@ -267,8 +268,8 @@ const declaredKeys = Object.keys(EXPECTED_VALUES).sort();
 check('DEFAULT_CONFIG exposes every key this table freezes a value for',
   declaredKeys.every((k) => derivedKeys.includes(k)),
   'missing=' + JSON.stringify(declaredKeys.filter((k) => !derivedKeys.includes(k))));
-check('R18: DEFAULT_CONFIG.autoCompact defaults to false (real paid summarisation call)',
-  DEFAULT_CONFIG.autoCompact === false, 'actual=' + JSON.stringify(DEFAULT_CONFIG.autoCompact));
+check('R19: DEFAULT_CONFIG.repairContext defaults to true (zero model calls, fail-closed)',
+  DEFAULT_CONFIG.repairContext === true, 'actual=' + JSON.stringify(DEFAULT_CONFIG.repairContext));
 for (const key of declaredKeys) {
   check('DEFAULT_CONFIG.' + key + ' == ' + JSON.stringify(EXPECTED_VALUES[key]),
     DEFAULT_CONFIG[key] === EXPECTED_VALUES[key],
@@ -412,14 +413,14 @@ for (const [label, input] of [
   check('R16: forkBrief settings do not leak into other defaults',
     canon(mergeConfig({ forkBrief: false, forkBriefNote: 'Y' })) ===
     canon({ ...DEFAULT_CONFIG, forkBrief: false, forkBriefNote: 'Y' }));
-  /* R18 (M9 idle compaction) config plumbing. */
-  check('R18: mergeConfig({autoCompact:true}) -> true',
-    mergeConfig({ autoCompact: true }).autoCompact === true);
-  check('R18: non-boolean autoCompact falls back to false',
-    ['yes', 1, 0, null, undefined, {}].every((v) => mergeConfig({ autoCompact: v }).autoCompact === false),
-    JSON.stringify(['yes', 1, 0, null, undefined, {}].map((v) => mergeConfig({ autoCompact: v }).autoCompact)));
-  check('R18: autoCompact does not leak into other defaults',
-    canon(mergeConfig({ autoCompact: true })) === canon({ ...DEFAULT_CONFIG, autoCompact: true }));
+  /* R19 (M9 surface repair) config plumbing. */
+  check('R19: mergeConfig({repairContext:false}) -> false',
+    mergeConfig({ repairContext: false }).repairContext === false);
+  check('R19: non-boolean repairContext falls back to true',
+    ['yes', 1, 0, null, undefined, {}].every((v) => mergeConfig({ repairContext: v }).repairContext === true),
+    JSON.stringify(['yes', 1, 0, null, undefined, {}].map((v) => mergeConfig({ repairContext: v }).repairContext)));
+  check('R19: repairContext does not leak into other defaults',
+    canon(mergeConfig({ repairContext: false })) === canon({ ...DEFAULT_CONFIG, repairContext: false }));
 }
 for (const [label, partial, key, want] of [
   ['NaN', { maxLines: NaN }, 'maxLines', 100],

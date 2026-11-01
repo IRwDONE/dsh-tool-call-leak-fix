@@ -73,7 +73,9 @@ const CORE_EVENTS = [
   'session/event',
   'agent/turn-stopping',
   'agent/pre-step', // R16 / M7 fork brief
-  'agent/status',   // R18 / M9 idle compaction
+  // R19 / M9 surface repair needs NO new seam: it runs on agent/turn-stopping
+  // (above) and writes through session.append. agent/status was only used by the
+  // withdrawn R18 compaction attempt and is deliberately not registered.
 ];
 const OPTIONAL_EVENTS = ['llm/stream'];
 const ALLOWED_EVENTS = [...CORE_EVENTS, ...OPTIONAL_EVENTS];
@@ -832,182 +834,191 @@ section('6c. R16/M7 fork brief (agent/pre-step)');
   }
 }
 
-section('6d. R18/M9 idle compaction (agent/status)');
+section('6d. R19/M9 surface repair (agent/turn-stopping + session surface)');
 {
-  const LOG = path.join(os.tmpdir(), 'guard-probe-compact.log');
+  const LOG = path.join(os.tmpdir(), 'guard-probe-repair.log');
   const resetLog = () => { try { unlinkSync(LOG); } catch { /* absent */ } };
-  const wait = () => new Promise((r) => setTimeout(r, 25));
   const logText = () => { try { return readFileSync(LOG, 'utf8'); } catch { return ''; } };
 
-  const makeCtx = (compaction) => {
+  const makeCtx = () => {
     const handlers = new Map();
     const ctx = {
       systemPrompt: { section() { return () => {}; } },
       tools: {},
-      get(name) { return name === 'compaction' ? compaction : undefined; },
+      get() { return undefined; },
       on(name, listener) { handlers.set(name, listener); return () => {}; },
       effect(fn) { fn(); },
     };
     return { ctx, handlers };
   };
-  /* Poison a session the way production does: one M4 correction. */
-  const poison = (handlers, sessionId) => {
-    handlers.get('session/event')({ id: sessionId }, {
-      type: 'assistant/message',
-      data: { turn: 1, step: 1, message: { role: 'assistant', content: [{ type: 'text', text: v1Text }] } },
-    });
-    handlers.get('agent/turn-stopping')({ agent: { id: sessionId, inject: () => {} }, turn: 1 });
+
+  /* Fake Session: append() shadows the target node in place, like the contract. */
+  const fakeSession = ({ nodes, events, own = () => true, fail = () => null }) => {
+    const session = {
+      appended: [],
+      surface: { nodes: nodes.slice() },
+      isOwnSeq: (seq) => own(seq),
+      eventAt: (seq) => events.get(seq),
+      append(type, data, opts) {
+        const err = fail(type, data, opts);
+        if (err) throw new Error(err);
+        const seq = 9000 + this.appended.length;
+        this.appended.push({ seq, type, data, opts });
+        const op = opts && opts.surfaceOp;
+        if (op && op.op === 'replace') {
+          const i = this.surface.nodes.indexOf(op.startSeq);
+          if (i >= 0) this.surface.nodes[i] = seq; else this.surface.nodes.push(seq);
+        } else {
+          this.surface.nodes.push(seq);
+        }
+        return { seq, type, data };
+      },
+    };
+    return session;
   };
 
-  /* (a) OFF by default: a poisoned, idle session triggers nothing. */
+  const assistantEvent = (text, calls = 0) => ({
+    type: 'assistant/message',
+    data: {
+      turn: 1,
+      step: 1,
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text },
+          ...(calls > 0 ? [{ type: 'tool-call', id: 't1', name: 'write', arguments: '{}' }] : []),
+        ],
+      },
+    },
+  });
+
+  /* 101: inherited + damaged (no tool call) · 102: inherited + healthy · 103: own */
+  const makePoisoned = (over = {}) =>
+    fakeSession({
+      nodes: [101, 102, 103],
+      events: new Map([
+        [101, assistantEvent(v1Text, 0)],
+        [102, assistantEvent('一切正常，这里没有调用标记。', 0)],
+        [103, assistantEvent('自己的步骤', 0)],
+      ]),
+      own: (seq) => seq >= 103,
+      ...over,
+    });
+
+  const stop = (handlers, session, id) =>
+    handlers.get('agent/turn-stopping')({ turn: 1, agent: { id, session, inject: () => {} } });
+
+  /* (a) OFF => nothing is appended at all. */
   {
     resetLog();
-    const calls = [];
-    const { ctx, handlers } = makeCtx({ compactIfNeeded: (...a) => { calls.push(a); return Promise.resolve(null); } });
-    mod.apply(ctx, { debugLog: true, debugLogPath: LOG });
-    poison(handlers, 'm9-off');
-    handlers.get('agent/status')({ agent: { id: 'm9-off', session: {} }, status: 'idle' });
-    await wait();
-    check('M9: autoCompact:false => compactIfNeeded is never called', calls.length === 0, 'calls=' + calls.length);
-    check('M9: autoCompact:false => nothing is logged as compacted', !logText().includes('status.compacted'));
+    const { ctx, handlers } = makeCtx();
+    mod.apply(ctx, { repairContext: false, debugLog: true, debugLogPath: LOG });
+    const session = makePoisoned();
+    stop(handlers, session, 'r19-off');
+    check('R19: repairContext:false => zero appends', session.appended.length === 0,
+      'appended=' + session.appended.length);
   }
-  /* (b) ON: idle + poisoned => exactly one call, documented shape, logged result. */
+
+  /* (b) Inherited damage is shadowed; healthy and own nodes are not. */
   {
     resetLog();
-    const calls = [];
-    const session = { marker: 'session-object' };
-    const compaction = {
-      compactIfNeeded: (...a) => { calls.push(a); return Promise.resolve({ shadowedSeqs: [1, 2], shadowedTokenCount: 42 }); },
+    const { ctx, handlers } = makeCtx();
+    mod.apply(ctx, { repairContext: true, debugLog: true, debugLogPath: LOG });
+    const session = makePoisoned();
+    stop(handlers, session, 'r19-on');
+    const replaces = session.appended.filter(
+      (a) => a.opts && a.opts.surfaceOp && a.opts.surfaceOp.op === 'replace');
+    check('R19: self-test runs before any real repair (append + replace first)',
+      session.appended.length >= 2, 'appended=' + session.appended.length);
+    check('R19: the damaged inherited node is shadowed', !session.surface.nodes.includes(101),
+      JSON.stringify(session.surface.nodes));
+    check('R19: the healthy inherited node is untouched', session.surface.nodes.includes(102),
+      JSON.stringify(session.surface.nodes));
+    check('R19: every replace carries sourceEventSeqs covering the shadowed node',
+      replaces.length >= 2 && replaces.every(
+        (a) => Array.isArray(a.opts.sourceEventSeqs) && a.opts.sourceEventSeqs.includes(a.opts.surfaceOp.startSeq)),
+      JSON.stringify(replaces.map((a) => a.opts)));
+    check('R19: repair.applied and repair.selfTest are logged',
+      logText().includes('repair.applied') && logText().includes('repair.selfTest'));
+  }
+
+  /* (c) A damaged node WITH a tool call is never touched (tool pairing). */
+  {
+    resetLog();
+    const { ctx, handlers } = makeCtx();
+    mod.apply(ctx, { repairContext: true, debugLog: true, debugLogPath: LOG });
+    const session = fakeSession({
+      nodes: [201],
+      events: new Map([[201, assistantEvent(v1Text, 1)]]),
+      own: () => false,
+    });
+    stop(handlers, session, 'r19-call');
+    check('R19: a damaged node that DID make a tool call is never shadowed',
+      session.surface.nodes.includes(201) && !logText().includes('repair.applied'),
+      JSON.stringify(session.surface.nodes));
+  }
+
+  /* (d) Self-test failure => fail closed, and never retried. */
+  {
+    resetLog();
+    const { ctx, handlers } = makeCtx();
+    mod.apply(ctx, { repairContext: true, debugLog: true, debugLogPath: LOG });
+    const session = makePoisoned({
+      fail: (t, d, o) =>
+        o && o.surfaceOp && o.surfaceOp.op === 'replace'
+          ? 'surface replace: sourceEventSeqs must include every shadowed surface node; missing 3204'
+          : null,
+    });
+    stop(handlers, session, 'r19-selffail');
+    const afterFirst = session.appended.length;
+    check('R19: a failing self-test leaves every real node untouched',
+      session.surface.nodes.includes(101), JSON.stringify(session.surface.nodes));
+    check('R19: a failing self-test is reported (repair.selfTest logged)',
+      logText().includes('repair.selfTest'), logText().slice(0, 160));
+    stop(handlers, session, 'r19-selffail');
+    check('R19: after a failed self-test the session is never retried',
+      session.appended.length === afterFirst,
+      'before=' + afterFirst + ' after=' + session.appended.length);
+  }
+
+  /* (e) A replace that does not shadow the target => repair.unverified, never retried. */
+  {
+    resetLog();
+    const { ctx, handlers } = makeCtx();
+    mod.apply(ctx, { repairContext: true, debugLog: true, debugLogPath: LOG });
+    const session = makePoisoned();
+    const origAppend = session.append.bind(session);
+    let n = 0;
+    session.append = function (type, data, opts) {
+      n += 1;
+      const ev = origAppend(type, data, opts);
+      const op = opts && opts.surfaceOp;
+      if (n > 2 && op && op.op === 'replace') {
+        const i = this.surface.nodes.indexOf(ev.seq);
+        if (i >= 0) this.surface.nodes[i] = op.startSeq; // undo the shadow
+      }
+      return ev;
     };
-    const { ctx, handlers } = makeCtx(compaction);
-    mod.apply(ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
-    poison(handlers, 'm9-on');
-    const agent = { id: 'm9-on', session };
-    handlers.get('agent/status')({ agent, status: 'running' });
-    await wait();
-    check('M9: non-idle status => no compaction call', calls.length === 0, 'calls=' + calls.length);
-    handlers.get('agent/status')({ agent, status: 'idle' });
-    await wait();
-    check('M9: idle + poisoned => exactly one call', calls.length === 1, 'calls=' + calls.length);
-    if (calls.length === 1) {
-      const [arg0, trigger, signal] = calls[0];
-      check('M9: first arg is CompactionAgentContext {session, options}',
-        !!arg0 && arg0.session === session && !!arg0.options && typeof arg0.options === 'object',
-        JSON.stringify({ keys: arg0 && Object.keys(arg0), sameSession: !!arg0 && arg0.session === session }));
-      check('M9: trigger literal is "context-overflow"', trigger === 'context-overflow', String(trigger));
-      check('M9: third arg is an AbortSignal instance', typeof AbortSignal === 'function' && signal instanceof AbortSignal);
-    }
-    check('M9: success is logged as status.compacted with shadowed counts',
-      /"where":"status\.compacted"/.test(logText()) && /"shadowedSeqs":2/.test(logText()) &&
-      /"shadowedTokens":42/.test(logText()),
-      JSON.stringify(logText().split('\n').filter((l) => l.includes('compacted')).slice(-1)));
-    const before = calls.length;
-    handlers.get('agent/status')({ agent, status: 'idle' });
-    await wait();
-    check('M9: at most once per session', calls.length === before, 'calls=' + calls.length);
+    stop(handlers, session, 'r19-unverified');
+    const afterFirst = session.appended.length;
+    check('R19: a replace that does not shadow is caught and logged as repair.unverified',
+      logText().includes('repair.unverified'), logText().slice(0, 160));
+    stop(handlers, session, 'r19-unverified');
+    check('R19: after repair.unverified the session is never retried',
+      session.appended.length === afterFirst,
+      'before=' + afterFirst + ' after=' + session.appended.length);
   }
-  /* (c) compaction service missing => no throw + an explicit skip record (R5 spirit). */
+
+  /* (f) A throwing append never escapes the listener. */
   {
     resetLog();
+    const { ctx, handlers } = makeCtx();
+    mod.apply(ctx, { repairContext: true, debugLog: true, debugLogPath: LOG });
+    let n = 0;
+    const session = makePoisoned({ fail: () => { n += 1; return n > 2 ? 'boom' : null; } });
     let threw = false;
-    const { ctx, handlers } = makeCtx(undefined);
-    mod.apply(ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
-    poison(handlers, 'm9-skip');
-    try { handlers.get('agent/status')({ agent: { id: 'm9-skip', session: {} }, status: 'idle' }); } catch { threw = true; }
-    await wait();
-    check('M9: missing compaction service does not throw', !threw);
-    check('M9: missing service is reported as status.compact-skip / no-compaction-service',
-      /"where":"status\.compact-skip"/.test(logText()) && /no-compaction-service/.test(logText()),
-      JSON.stringify(logText().slice(-220)));
-  }
-  /* (d) service present but agent.session missing => skip logged, no call. */
-  {
-    resetLog();
-    const calls = [];
-    const { ctx, handlers } = makeCtx({ compactIfNeeded: (...a) => { calls.push(a); return Promise.resolve(null); } });
-    mod.apply(ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
-    poison(handlers, 'm9-nosession');
-    handlers.get('agent/status')({ agent: { id: 'm9-nosession' }, status: 'idle' });
-    await wait();
-    check('M9: missing agent.session => no call + status.compact-skip / no-session',
-      calls.length === 0 && /"where":"status\.compact-skip"/.test(logText()) && /no-session/.test(logText()),
-      'calls=' + calls.length + ' log=' + JSON.stringify(logText().slice(-160)));
-  }
-  /* (e) synchronous throw => swallowed + logged; never propagated. */
-  {
-    resetLog();
-    let threw = false;
-    const sync = makeCtx({ compactIfNeeded: () => { throw new Error('sync-boom'); } });
-    mod.apply(sync.ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
-    poison(sync.handlers, 'm9-sync');
-    try { sync.handlers.get('agent/status')({ agent: { id: 'm9-sync', session: {} }, status: 'idle' }); } catch { threw = true; }
-    await wait();
-    check('M9: synchronous throw is swallowed and logged as status.compact-failed',
-      !threw && /"where":"status\.compact-failed"/.test(logText()) && /sync-boom/.test(logText()),
-      JSON.stringify(logText().slice(-200)));
-  }
-  /* (e2) rejected promise => caught by the rejection handler (never unhandled). */
-  {
-    resetLog();
-    let threw = false;
-    const rej = makeCtx({ compactIfNeeded: () => Promise.reject(new Error('async-boom')) });
-    mod.apply(rej.ctx, { autoCompact: true, debugLog: true, debugLogPath: LOG });
-    poison(rej.handlers, 'm9-async');
-    try { rej.handlers.get('agent/status')({ agent: { id: 'm9-async', session: {} }, status: 'idle' }); } catch { threw = true; }
-    await wait();
-    check('M9: rejected promise is handled (not awaited) and logged as failed',
-      !threw && /"where":"status\.compact-failed"/.test(logText()) && /async-boom/.test(logText()),
-      JSON.stringify(logText().slice(-200)));
-  }
-  /* (f) the listener must not block the driver on a never-settling compaction. */
-  {
-    const { ctx, handlers } = makeCtx({ compactIfNeeded: () => new Promise(() => {}) });
-    mod.apply(ctx, { autoCompact: true });
-    poison(handlers, 'm9-noblock');
-    const t0 = Date.now();
-    const ret = handlers.get('agent/status')({ agent: { id: 'm9-noblock', session: {} }, status: 'idle' });
-    const ms = Date.now() - t0;
-    check('M9: listener returns immediately and returns undefined (does not await compaction)',
-      ms < 50 && ret === undefined, 'ms=' + ms + ' ret=' + JSON.stringify(ret));
-  }
-  /* (g) static lock on the call shape taken from the live Service contract. */
-  {
-    check('M9 interface: the call matches the live contract shape ' +
-      '(CompactionAgentContext, CompactionTrigger, AbortSignal)',
-      /ctx\.get\('compaction'\)/.test(idxSrc) &&
-      /compactIfNeeded\(\{\s*session,\s*options:\s*\{\}\s*\},\s*'context-overflow'/.test(idxSrc),
-      'source does not match the queried contract');
-  }
-  /* (h) D-12-class guard added by the owner: the mount is PROBED, never assumed —
-   * at activation (in the activation line) and once at event time. */
-  {
-    resetLog();
-    const { ctx, handlers } = makeCtx({ compactIfNeeded: () => Promise.resolve(null) });
-    mod.apply(ctx, { autoCompact: false, debugLog: true, debugLogPath: LOG });
-    check('M9/D-12 guard: activation line reports compactionService presence (true)',
-      /"compactionService":true/.test(logText()),
-      JSON.stringify(logText().split('\n')[0]));
-    const agent = { id: 'm9-probe', session: {} };
-    handlers.get('agent/status')({ agent, status: 'running' });
-    handlers.get('agent/status')({ agent, status: 'idle' });
-    const probes = logText().match(/"where":"probe\.compaction"/g) || [];
-    check('M9/D-12 guard: event-time probe logs exactly once and reports available=true',
-      probes.length === 1 && /"where":"probe\.compaction","available":true/.test(logText()),
-      JSON.stringify({ probes: probes.length, lines: logText().split('\n').filter((l) => l.includes('probe.compaction')) }));
-  }
-  {
-    resetLog();
-    const { ctx, handlers } = makeCtx(undefined);
-    mod.apply(ctx, { autoCompact: false, debugLog: true, debugLogPath: LOG });
-    check('M9/D-12 guard: activation line reports compactionService:false when unmounted',
-      /"compactionService":false/.test(logText()), JSON.stringify(logText().split('\n')[0]));
-    const agent = { id: 'm9-probe-none', session: {} };
-    handlers.get('agent/status')({ agent, status: 'idle' });
-    handlers.get('agent/status')({ agent, status: 'idle' });
-    const probes = logText().match(/"where":"probe\.compaction"/g) || [];
-    check('M9/D-12 guard: event-time probe reports available=false exactly once',
-      probes.length === 1 && /"where":"probe\.compaction","available":false/.test(logText()),
-      JSON.stringify({ probes: probes.length, lines: logText().split('\n').filter((l) => l.includes('probe.compaction')) }));
+    try { stop(handlers, session, 'r19-throw'); } catch { threw = true; }
+    check('R19: a throwing append never escapes the turn-stopping listener', !threw);
   }
 }
 

@@ -365,6 +365,8 @@ export function apply(ctx, rawConfig) {
      It costs no model call. */
   const damagedSeqs = new Map(); // sessionId -> Set<SessionSeq>
   const repairState = new Map(); // sessionId -> { tested, ok, scanned }
+  /** Whether the current repair pass has real targets (read by selfTestSurface). */
+  let hasTargetsNow = false;
 
   /** One assistant event judged: text, tool-call count, damage verdict. */
   function judgeAssistantEvent(event) {
@@ -412,12 +414,22 @@ export function apply(ctx, rawConfig) {
    * op costs one benign node, never a real message.
    */
   function selfTestSurface(session) {
-    const note = repairNoteText();
+    // With debugLog on the self-test also runs with nothing to repair, so its
+    // result can never be confused with "no damage found"; then the note must
+    // not claim a repair that did not happen.
+    const note = config.debugLog === true && !hasTargetsNow
+      ? '（插件自检：surface replace 语义已确认；未修改任何历史）'
+      : repairNoteText();
     const probe = session.append('user/message', pluginMessage('（surface replace 自检）', SOURCE_RUNTIME_CONTEXT), {
       surfaceOp: 'append',
     });
     const swap = session.append('user/message', pluginMessage(note, SOURCE_RUNTIME_CONTEXT), {
       surfaceOp: { op: 'replace', startSeq: probe.seq, endSeq: probe.seq },
+      // Required at runtime (the type marks it optional): the harness rejects a
+      // replace whose sourceEventSeqs does not cover every shadowed node —
+      // "surface replace: sourceEventSeqs must include every shadowed surface
+      // node; missing <seq>" (observed live, 2026-11-02).
+      sourceEventSeqs: [probe.seq],
     });
     const nodes = session.surface.nodes;
     return { ok: !nodes.includes(probe.seq) && nodes.includes(swap.seq), probe: probe.seq, swap: swap.seq };
@@ -428,6 +440,7 @@ export function apply(ctx, rawConfig) {
     const note = repairNoteText();
     const appended = session.append('user/message', pluginMessage(note, SOURCE_RUNTIME_CONTEXT), {
       surfaceOp: { op: 'replace', startSeq: seq, endSeq: seq },
+      sourceEventSeqs: [seq], // see selfTestSurface: required for a replace
     });
     const nodes = session.surface.nodes;
     const ok = !nodes.includes(seq) && nodes.includes(appended.seq);
@@ -466,7 +479,11 @@ export function apply(ctx, rawConfig) {
     }
 
     const targets = damagedSeqs.get(sessionId);
-    if (!targets || targets.size === 0) return;
+    hasTargetsNow = Boolean(targets) && targets.size > 0;
+    // Nothing to repair is the normal case — except while debugLog is on, where
+    // the self-test runs once per session anyway so the harness-side semantics of
+    // the replace op are confirmed without waiting for real damage.
+    if (!hasTargetsNow && (config.debugLog !== true || state.tested)) return;
 
     if (!state.tested) {
       state.tested = true;
@@ -481,6 +498,7 @@ export function apply(ctx, rawConfig) {
       if (!state.ok) return; // fail closed for this session, never silently
     }
     if (state.ok !== true) return;
+    if (!hasTargetsNow) return; // debugLog-only self-test: nothing else to do
 
     for (const seq of Array.from(targets).slice(0, 20)) {
       try {
