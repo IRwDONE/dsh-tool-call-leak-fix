@@ -14,6 +14,43 @@
 
 ---
 
+## 0. 你会先看到的，是这个（贴一段真实形态）
+
+下面这段是**真实故障的节选**（渲染上尽量贴近 DSH 里看到的样子）：
+
+```text
+已完成，用时 1分55秒
+思考
+  My last call AGAIN used unprefixed tags (`<parameter name="code">`, `</parameter>`,
+  `</invoke>`). I need to use `antml:` prefix.
+  <antml:invoke name="run_code"> <antml:parameter name="code">const st = await
+  (await import("node:fs/promises")).stat("ui.html").catch(() => null); return
+  { uiBytes: st ? st.size : "MISSING" };</antml:parameter> <antml:parameter
+  name="description">Check ui.html size</antml:parameter> </antml:invoke>
+（然后 turn 就结束了：没有任何工具被执行，界面看起来却像"已完成"。）
+```
+
+> 说明：上面这段**故意保留**了真实的连续闭合序列（参数闭合紧跟调用闭合）—— 因为**它正是故障本体**，去掉就看不出问题了。本仓其余文档仍遵守"**不写字面连续闭合标签**"的约定（见 §1 的记号说明）。
+
+**注意三件事**：① **思考是正常的**，它甚至知道"自己本该用 `antml:` 前缀"；② 那一次调用**没有执行**，整段变成了**正文**；③ 对话**不会报错**，turn 照常关闭 —— 这就是"**静默失败**"。
+
+然后你会发现这些办法**都不管用**：
+
+| 你试的办法 | 实际结果 |
+| --- | --- |
+| 在对话里让 DSH **自己修** | 它道歉、继续解释，然后**又**写坏一次；重试还会往历史里**再塞一个坏样本**，越滚越坏（社区把这种连锁叫 *chain reaction*） |
+| **fork** 出去继续 | 父会话里那几段坏输出**跟着被继承**，模型照着**模仿**，继续失败 |
+| **compact** 一下 / 等一段时间 | 好一阵子，之后**又**复现同样的泄漏 |
+| **装上这个插件** | **fork 之后**，历史里那些损坏输出会在**模型可见面上被作废**（换成一条说明），后续对话**不再出现这类泄漏型失败** |
+
+> 这不是本插件臆想的问题：同类现象在 Claude Code 上也有公开记录 —— 例如
+> [`anthropics/claude-code#64108`](https://github.com/anthropics/claude-code/issues/64108)
+> 描述的 *"tool calls emitted as literal text (stray `court` + raw `<invoke>`)"*，并指出
+> **"tags are bare — the `antml:` namespace prefix is dropped"**、以及"API 已示意 tool-use 但正文没有 tool_use 块"。
+> 本插件把这一类失败（**调用标记泄漏为正文**、**开场标记缺失**、**结束序列增殖**、**参数被截断**、**伪造工具结果**）统一接住。
+
+---
+
 ## 1. 问题
 
 当模型要写一个非常大的工具调用参数时——尤其当内容本身就充满以 `</` 开头的闭合标签（HTML / CSS / XML / JSX）——它可能在生成过程中**丢掉参数的边界**。已观测到三种形态：

@@ -14,6 +14,43 @@ It detects damaged tool-call arguments, blocks the broken call with an actionabl
 
 ---
 
+## 0. What you see first (a real failure, abridged)
+
+This is an **excerpt of a real failure**, rendered to look like what DSH shows:
+
+```text
+已完成，用时 1分55秒
+思考
+  My last call AGAIN used unprefixed tags (`<parameter name="code">`, `</parameter>`,
+  `</invoke>`). I need to use `antml:` prefix.
+  <antml:invoke name="run_code"> <antml:parameter name="code">const st = await
+  (await import("node:fs/promises")).stat("ui.html").catch(() => null); return
+  { uiBytes: st ? st.size : "MISSING" };</antml:parameter> <antml:parameter
+  name="description">Check ui.html size</antml:parameter> </antml:invoke>
+(the turn then simply ends: no tool ever ran, yet the UI looks like "completed")
+```
+
+> Note: that block **deliberately keeps** a real contiguous closing run (the parameter close immediately followed by the call close) — because **that run is the failure itself**; without it the example would not show the problem. Every other document in this repo still follows the "never emit a literal contiguous closing-tag run" convention (see the notation note in §1).
+
+**Three things to notice:** ① **the thinking is perfectly sane** — it even knows it was supposed to use the `antml:` prefix; ② the call **never executed**, the whole envelope became **prose**; ③ nothing errors out — the turn closes normally. That is the **silent failure**.
+
+And then none of the obvious remedies work:
+
+| What you try | What actually happens |
+| --- | --- |
+| Ask DSH to **fix itself** in the conversation | It apologises, explains, then breaks it **again**; each retry writes **another bad sample** into the history — the community calls the runaway version a *chain reaction* |
+| **Fork** the session and continue | The broken outputs are **inherited**, the model **imitates** them, and it keeps failing |
+| **Compact** / wait a while | Fine for a while, then the same leak comes back |
+| **Install this plugin** | After a **fork**, the damaged outputs are **voided on the model-visible surface** (replaced by a short note), and the conversation stops producing this leak-type failure |
+
+> This is not an invented problem: the same phenomenon is publicly documented for Claude Code — e.g.
+> [`anthropics/claude-code#64108`](https://github.com/anthropics/claude-code/issues/64108),
+> *"tool calls emitted as literal text (stray `court` + raw `<invoke>`)"*, which notes that
+> **"tags are bare — the `antml:` namespace prefix is dropped"** and that the API signalled tool-use while the body had no `tool_use` block.
+> This plugin catches that whole family: **markup leaked as prose**, **missing opening marker**, **multiplied end sequences**, **truncated arguments**, and **fabricated tool results**.
+
+---
+
 ## 1. The problem
 
 When a model writes a very large tool-call argument — especially when the payload itself is full of `</`-prefixed closing tags (HTML, CSS, XML, JSX) — it can **lose the argument's boundary** while generating. Three shapes have been observed:
