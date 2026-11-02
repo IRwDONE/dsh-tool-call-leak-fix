@@ -272,7 +272,7 @@ locale 内容（`host-plugin.md:38-42`）：`{ "meta": { "title": "My Decoration
           transport: stdio
           command: '<node.exe 的本机路径>'
           args:
-            - '<<mcp-script> 的本机路径>'
+            - '<MCP 脚本的本机路径>'
           ...
   ```
 - 出厂 patch 同样用 `- insert:`：`...\@deepseek-ai\dsh-web-app\cordis.patch.yml:44,590`、`dsh-base\cordis.patch.yml:15`、`dsh-acp-app\cordis.patch.yml:11`、`dsh-headless\cordis.patch.yml:19`、`dsh-sdk-app\cordis.patch.yml:11,28` 等 20+ 处（grep `insert:` with `include=cordis.patch.yml`）。
