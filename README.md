@@ -2,15 +2,13 @@
 
 **简体中文** | [English](README.en.md)
 
-> 包名 `@irwdone/dsh-tool-call-leak-fix`（与 GitHub 仓库同名）｜当前版本 **0.5.0**。
-> **怎么确认本地的修复真的更新了**：插件管理器里看该 bundle 的版本号；或直接看 profile 的
-> `node_modules/@irwdone/dsh-tool-call-leak-fix/package.json`。
+一个 **DSH（DeepSeek Harness）宿主插件**，治一种**静默失败**：工具调用**没有执行**，调用标记（`invoke` / `parameter`，`antml:` 前缀或赤裸形式）却**泄漏成正文**，而 turn 像"已完成"一样正常关闭。
 
-一个 **DSH（DeepSeek Harness）宿主插件**：把**静默**的工具调用失败，变成**显式且可恢复**的失败。
+它做四件事：**拦下**已损坏的调用 → turn 将静默关闭时**在同一 turn 内纠正** → **fork** 时给继承来的历史打**简报** → 把历史里损坏的输出在**模型可见面上作废**（最后一条零模型调用）。
 
-它会检测损坏的工具调用参数、带可操作原因拦下这次调用；当 turn 被静默关闭时，让模型**在同一个 turn 内**重试。
+**零依赖**，只需要 DSH 本身（Host 半边，桌面端与 CLI 用同一批核心接缝）。
 
-> **状态**：当前可用。`M2`（拦截）与 `M4`（自愈）已在真实 profile 上**现场验证**；但并非所有设想都能实现，请务必读「已验证 / 未验证」与「已知边界」两节。
+> 状态：可用。`M2`（拦截）、`M4`（自愈）、`M7`（fork 简报）、`M9`（上下文修复）均已**现场验证**；做不到的部分（如 `M5` 改写历史）见「已知边界」。
 
 ---
 
@@ -112,9 +110,21 @@ INVOKE_END × 4   ← 外层结束序列在此重复
 
 ## 4. 安装（DSH 用户）
 
-用 Harness 自带的**插件管理器**安装。`install_bundle` 的 `target` 接受**绝对本地路径**、`file:` / `link:` 路径、**git spec**、或 tarball URL。**不要**手改 profile。
+用 Harness 自带的**插件管理器**安装，**不要**手改 profile。三种方式任选：
 
-**方式 A · 一条命令（推荐）**
+**方式 A · 在插件管理器里搜包名（最直观）**
+
+打开**插件市场 / 插件管理器**，搜索 **`dsh-tool-call-leak-fix`**（或完整包名 `@irwdone/dsh-tool-call-leak-fix`），点安装。装好后在已装列表里能看到版本号。
+
+**方式 B · 一条命令**
+
+npm 包名（不依赖仓库是否公开）：
+
+```
+@irwdone/dsh-tool-call-leak-fix
+```
+
+或直接从 GitHub 装（仓库需为公开）：
 
 ```
 https://github.com/IRwDONE/dsh-tool-call-leak-fix
@@ -122,7 +132,7 @@ https://github.com/IRwDONE/dsh-tool-call-leak-fix
 
 包身份就在**仓库根**（`package.json` 在根、patch 为 `plugin/cordis.patch.yml`），所以 git spec 直接可装。
 
-**方式 B · 克隆后按本地路径安装**（想改代码、跟着开发时用）
+**方式 C · 克隆后按本地路径安装**（想改代码、跟着开发时用）
 
 ```bash
 git clone https://github.com/IRwDONE/dsh-tool-call-leak-fix.git

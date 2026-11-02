@@ -2,7 +2,7 @@
 
 Host 插件。针对**工具调用参数边界丢失**（模型侧结构化输出退化）做「检测 → 显式失败 → 同一 turn 内自愈」。
 
-- 包名：`@irwdone/dsh-tool-call-leak-fix`（与 GitHub 仓库 `IRwDONE/dsh-tool-call-leak-fix` 同步）；版本 **0.5.0**；patch 行 id：`tool-call-leak-fix`；仅 Host 半边（无 client 资源）。
+- 包名：`@irwdone/dsh-tool-call-leak-fix`（与 GitHub 仓库 `IRwDONE/dsh-tool-call-leak-fix` 同步）；版本 **0.5.1**；patch 行 id：`tool-call-leak-fix`；仅 Host 半边（无 client 资源）。
   > **确认本地插件是否更新**：看插件管理器里这个 bundle 的**版本号**；或直接看 profile 的
   > `node_modules/@irwdone/dsh-tool-call-leak-fix/package.json`（本机是 `link:`，指向**本仓库根**）。
 - 依赖：**零依赖**、零构建、纯 JS（ESM）。检测核心 `src/detect.js` 是纯函数，可在普通 node 下直接跑。

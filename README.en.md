@@ -2,15 +2,13 @@
 
 [简体中文](README.md) | **English**
 
-> Package `@irwdone/dsh-tool-call-leak-fix` (same name as the GitHub repo) | current version **0.5.0**.
-> **How to tell the local plugin really updated**: read this bundle's version in the Plugin Manager, or look at
-> `node_modules/@irwdone/dsh-tool-call-leak-fix/package.json` in the profile.
+A **DSH (DeepSeek Harness) Host plugin** for one **silent failure**: a tool call never executes, its markup (`invoke` / `parameter` tags, `antml:`-prefixed or bare) **leaks into the reply as text**, and the turn closes as if the work were done.
 
-A **DSH (DeepSeek Harness) Host plugin** that turns **silent** tool-call failures into **explicit, recoverable** ones.
+It does four things: **block** a damaged call → **correct inside the same turn** when the turn would close silently → brief a **fork** on the history it inherits → **void the damaged output on the model-visible surface** (the last one costs zero model calls).
 
-It detects damaged tool-call arguments, blocks the broken call with an actionable reason, and — when a turn would otherwise close silently — makes the model retry **inside the same turn**.
+**Zero dependencies** — it needs nothing but DSH itself (Host half; desktop and CLI share the same core seams).
 
-> **Status.** Usable today. `M2` (block) and `M4` (self-heal) are **field-verified on a live profile**. Not every idea turned out to be possible: please read [Verified vs. not verified](#6-verified-vs-not-verified) and [Limitations](#8-limitations).
+> Status: usable. `M2` (block), `M4` (self-heal), `M7` (fork brief) and `M9` (context repair) are all **field-verified**; what is not possible (e.g. `M5` rewriting history) is in [Limitations](#8-limitations).
 
 ---
 
@@ -112,9 +110,21 @@ Three guards, each one silent until something is actually wrong:
 
 ## 4. Install (for DSH users)
 
-Install through the Harness's own **Plugin Manager**. `install_bundle`'s `target` accepts an **absolute local path**, a `file:` / `link:` path, a **git spec**, or a tarball URL. Do **not** hand-edit the profile.
+Install through the Harness's own **Plugin Manager**; do **not** hand-edit the profile. Pick any of three ways:
 
-**Option A · one command (recommended)**
+**Option A · search the package name in the Plugin Manager (easiest)**
+
+Open the **plugin market / Plugin Manager** and search for **`dsh-tool-call-leak-fix`** (or the full name `@irwdone/dsh-tool-call-leak-fix`), then install. The installed list shows the version.
+
+**Option B · one command**
+
+The npm package (works regardless of whether the repo is public):
+
+```
+@irwdone/dsh-tool-call-leak-fix
+```
+
+or straight from GitHub (the repository must be public):
 
 ```
 https://github.com/IRwDONE/dsh-tool-call-leak-fix
@@ -122,7 +132,7 @@ https://github.com/IRwDONE/dsh-tool-call-leak-fix
 
 The package identity lives at the **repository root** (`package.json` at the root, patch at `plugin/cordis.patch.yml`), so the git spec installs directly.
 
-**Option B · clone, then install by local path** (when you want to edit the code)
+**Option C · clone, then install by local path** (when you want to edit the code)
 
 ```bash
 git clone https://github.com/IRwDONE/dsh-tool-call-leak-fix.git
