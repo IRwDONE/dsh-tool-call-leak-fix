@@ -1,5 +1,5 @@
 /**
- * Host half of the `structured-output-guard` bundle.
+ * Host half of the `tool-call-leak-fix` bundle.
  *
  * Mechanisms (see docs/DESIGN.md §5):
  *   M2  tools/pre-execute  waterfall       deny a damaged / emptied call (C)
@@ -69,7 +69,7 @@ function configSchema(raw) {
 
 configSchema['~standard'] = {
   version: 1,
-  vendor: 'structured-output-guard',
+  vendor: 'tool-call-leak-fix',
   validate(value) {
     return { value: mergeConfig(value) };
   },
@@ -77,8 +77,8 @@ configSchema['~standard'] = {
 
 export const Config = configSchema;
 
-/** Must stay identical to `name` in plugin/package.json (used for source kinds). */
-const PACKAGE_NAME = '@irwdone/dsh-structured-output-guard';
+/** Must stay identical to `name` in the repo-root package.json (used for source kinds). */
+const PACKAGE_NAME = '@irwdone/dsh-tool-call-leak-fix';
 /* ------------------------------------------------------------------ */
 /* message construction                                                */
 /* ------------------------------------------------------------------ */
@@ -175,7 +175,7 @@ function makeLogger(config) {
   // R10 / D-6: an empty or non-string target is derived from the system temp
   // directory, so no machine-specific path is ever baked into the package.
   const configured = typeof config.debugLogPath === 'string' ? config.debugLogPath.trim() : '';
-  const target = configured || join(tmpdir(), 'structured-output-guard-debug.log');
+  const target = configured || join(tmpdir(), 'tool-call-leak-fix-debug.log');
   let ready = false;
   return (line) => {
     try {

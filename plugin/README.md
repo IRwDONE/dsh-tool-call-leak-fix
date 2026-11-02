@@ -1,10 +1,10 @@
-# 结构化输出守卫（structured-output-guard）
+# dsh-tool-call-leak-fix
 
 Host 插件。针对**工具调用参数边界丢失**（模型侧结构化输出退化）做「检测 → 显式失败 → 同一 turn 内自愈」。
 
-- 包名：`@irwdone/dsh-structured-output-guard`（与 GitHub 仓库 `IRwDONE/dsh-structured-output-guard` 同步）；版本 **0.4.2**；patch 行 id：`structured-output-guard`；仅 Host 半边（无 client 资源）。
+- 包名：`@irwdone/dsh-tool-call-leak-fix`（与 GitHub 仓库 `IRwDONE/dsh-tool-call-leak-fix` 同步）；版本 **0.5.0**；patch 行 id：`tool-call-leak-fix`；仅 Host 半边（无 client 资源）。
   > **确认本地插件是否更新**：看插件管理器里这个 bundle 的**版本号**；或直接看 profile 的
-  > `node_modules/@irwdone/dsh-structured-output-guard/package.json`（本机是 `link:`，指向本仓 `plugin/`）。
+  > `node_modules/@irwdone/dsh-tool-call-leak-fix/package.json`（本机是 `link:`，指向**本仓库根**）。
 - 依赖：**零依赖**、零构建、纯 JS（ESM）。检测核心 `src/detect.js` 是纯函数，可在普通 node 下直接跑。
 
 ## 它做什么
@@ -38,7 +38,7 @@ Host 插件。针对**工具调用参数边界丢失**（模型侧结构化输�
 | 机制 | `source.kind` | 理由 |
 | --- | --- | --- |
 | **M4**（turn-stopping 自愈） | `runtime-context` | 框架的运行时上下文 kind（`producerKind()` 同文件 87–92 行），语义就是"注入的上下文" |
-| **M3**（结果后纠偏） | `plugin:@irwdone/dsh-structured-output-guard` | 第三方插件的生产者 kind 形式 `plugin:<package name>`；必须与 `package.json` 的 `name` **逐字一致** |
+| **M3**（结果后纠偏） | `plugin:@irwdone/dsh-tool-call-leak-fix` | 第三方插件的生产者 kind 形式 `plugin:<package name>`；必须与 `package.json` 的 `name` **逐字一致** |
 
 `id` 用 `crypto.randomUUID()`，等价于框架 `createUserMessage()` 的 `brandString(randomUUID())`（本插件无法 import `@deepseek-ai/dsh-llm`，故自行 brand）。
 

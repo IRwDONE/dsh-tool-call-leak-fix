@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "dsh-structured-output-guard",
+    "title": "dsh-tool-call-leak-fix",
     "description": "修复静默失败：工具调用没被执行，调用标记（invoke / parameter 标签，带 antml: 前缀或赤裸形式）反而泄漏成正文。检测并拒绝已损坏的调用、同一 turn 内自动纠正；fork 之后还会把历史里损坏的输出在模型可见面上作废（零额外模型调用）。"
   }
 }

@@ -1127,7 +1127,7 @@ async function main() {
   const stripComments = (src) =>
     src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/gm, '$1 ');
   const INDEX_CODE = stripComments(INDEX_SRC);
-  const PKG = JSON.parse(readFileSync(path.join(HERE, '..', 'plugin', 'package.json'), 'utf8'));
+  const PKG = JSON.parse(readFileSync(path.join(HERE, '..', 'package.json'), 'utf8'));
   const PKG_NAME = PKG.name;
   const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

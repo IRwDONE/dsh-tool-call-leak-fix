@@ -1,10 +1,10 @@
-# dsh-structured-output-guard
+# dsh-tool-call-leak-fix
 
 **简体中文** | [English](README.en.md)
 
-> 包名 `@irwdone/dsh-structured-output-guard`（与 GitHub 仓库同名）｜当前版本 **0.4.2**。
+> 包名 `@irwdone/dsh-tool-call-leak-fix`（与 GitHub 仓库同名）｜当前版本 **0.5.0**。
 > **怎么确认本地的修复真的更新了**：插件管理器里看该 bundle 的版本号；或直接看 profile 的
-> `node_modules/@irwdone/dsh-structured-output-guard/package.json`。
+> `node_modules/@irwdone/dsh-tool-call-leak-fix/package.json`。
 
 一个 **DSH（DeepSeek Harness）宿主插件**：把**静默**的工具调用失败，变成**显式且可恢复**的失败。
 
@@ -114,27 +114,27 @@ INVOKE_END × 4   ← 外层结束序列在此重复
 
 用 Harness 自带的**插件管理器**安装。`install_bundle` 的 `target` 接受**绝对本地路径**、`file:` / `link:` 路径、**git spec**、或 tarball URL。**不要**手改 profile。
 
-**方式 A · 克隆后本地安装（现在就能用，推荐）**
+**方式 A · 一条命令（推荐）**
+
+```
+https://github.com/IRwDONE/dsh-tool-call-leak-fix
+```
+
+包身份就在**仓库根**（`package.json` 在根、patch 为 `plugin/cordis.patch.yml`），所以 git spec 直接可装。
+
+**方式 B · 克隆后按本地路径安装**（想改代码、跟着开发时用）
 
 ```bash
-git clone https://github.com/IRwDONE/dsh-structured-output-guard.git
+git clone https://github.com/IRwDONE/dsh-tool-call-leak-fix.git
 ```
 
-然后在插件管理器里执行 `install_bundle`，`target` 填**克隆目录下的 `plugin/` 绝对路径**：
+然后 `install_bundle` 的 `target` 填**克隆目录本身**（即仓库根，含 `package.json`）：
 
 ```
-<你的克隆路径>\dsh-structured-output-guard\plugin
+<你的克隆路径>\dsh-tool-call-leak-fix
 ```
 
-⚠️ target 必须是**包目录**——也就是含 `package.json` 与 `cordis.patch.yml` 的那一层。
-
-**方式 B · 一条命令直接用 GitHub 链接（目前不生效）**
-
-```
-https://github.com/IRwDONE/dsh-structured-output-guard
-```
-
-git spec 会按**仓库根**找包，而本仓库的包在 `plugin/` 子目录，所以这条**目前会失败**。等包挪到仓库根之后即可（这是可选改进，尚未做）。
+⚠️ 不要填到 `plugin/` 子目录 —— 那里只放实现代码（`index.js` / `src/` / `locale/` / `cordis.patch.yml`），包身份在仓库根。
 
 **安装之后**
 
@@ -142,7 +142,7 @@ git spec 会按**仓库根**找包，而本仓库的包在 `plugin/` 子目录�
 1. install_bundle 返回 application: "applied" -> 已生效
    若提示需要重启，就重启 Harness。
 2. 确认该行已挂载（**判活要用对地方**）：
-   - ✅ 插件管理器列表；或 Harness 的 Config 检查（会出现 `include:structured-output-guard`）；
+   - ✅ 插件管理器列表；或 Harness 的 Config 检查（会出现 `include:tool-call-leak-fix`）；
    - ✅ 最硬的判据：它是否**真的注入了纠正**。
    - ❌ **不要去 grep profile 的 `~/.dsh/profiles/<profile>/cordis.patch.yml`**：
      bundle **自带 patch**（本包的 `plugin/cordis.patch.yml`，由 `package.json` 的
@@ -243,15 +243,18 @@ git spec 会按**仓库根**找包，而本仓库的包在 `plugin/` 子目录�
 ## 9. 仓库结构
 
 ```text
-plugin/           可安装的 bundle（package.json + cordis.patch.yml + index.js + src/）
-  src/detect.js   纯检测核心——不 import 任何 DSH 包，可在普通 node 下直接跑
-  index.js        Host 接线：M2/M3/M4，每个监听器都 try/catch + effect 作用域注册
-docs/             设计、冻结契约（R1–R12）、契约调研、提示词文案
-tests/            182 条断言：V1/V2/V3 的 fixture + 反例 + 性质测试
-verify/           独立验证：独立探针 + 复现脚本 + 报告
+package.json        包身份在【仓库根】—— 所以 install_bundle 直接填仓库 URL 即可
+plugin/             实现（不含 package.json）
+  index.js          Host 接线：M2/M3/M4/M7/M9，每个监听器都 try/catch + effect 作用域注册
+  src/detect.js     纯检测核心——不 import 任何 DSH 包，可在普通 node 下直接跑
+  cordis.patch.yml  挂载行（`- insert:` 列表）
+  locale/*.json     插件管理器显示名与描述（中/英）
+docs/               设计、冻结契约（R1–R19）、契约调研、提示词文案
+tests/              193 条断言：V1/V2/V3 的 fixture + 反例 + 性质测试
+verify/             独立验证：独立探针 + 复现脚本 + 报告
 ```
 
-`plugin/` 是包本体，其余都是**证据**。
+**包根 = 仓库根**（`package.json` 在根，patch 指向 `plugin/cordis.patch.yml`）；`plugin/` 之后是全部实现，`docs` / `tests` / `verify` 是**证据**。
 
 ## 10. 许可
 

@@ -1,8 +1,8 @@
 # New rows MUST be written as an `- insert:` list. A bare `- id: <new>` only
 # overrides an existing row by id and is a silent no-op for a new one.
 - insert:
-    - id: structured-output-guard
-      name: '@irwdone/dsh-structured-output-guard'
+    - id: tool-call-leak-fix
+      name: '@irwdone/dsh-tool-call-leak-fix'
       config:
         enabled: true
         maxLines: 100

@@ -1,10 +1,10 @@
-# dsh-structured-output-guard
+# dsh-tool-call-leak-fix
 
 [简体中文](README.md) | **English**
 
-> Package `@irwdone/dsh-structured-output-guard` (same name as the GitHub repo) | current version **0.4.2**.
+> Package `@irwdone/dsh-tool-call-leak-fix` (same name as the GitHub repo) | current version **0.5.0**.
 > **How to tell the local plugin really updated**: read this bundle's version in the Plugin Manager, or look at
-> `node_modules/@irwdone/dsh-structured-output-guard/package.json` in the profile.
+> `node_modules/@irwdone/dsh-tool-call-leak-fix/package.json` in the profile.
 
 A **DSH (DeepSeek Harness) Host plugin** that turns **silent** tool-call failures into **explicit, recoverable** ones.
 
@@ -114,27 +114,27 @@ Three guards, each one silent until something is actually wrong:
 
 Install through the Harness's own **Plugin Manager**. `install_bundle`'s `target` accepts an **absolute local path**, a `file:` / `link:` path, a **git spec**, or a tarball URL. Do **not** hand-edit the profile.
 
-**Option A · clone, then install locally (works today; recommended)**
+**Option A · one command (recommended)**
+
+```
+https://github.com/IRwDONE/dsh-tool-call-leak-fix
+```
+
+The package identity lives at the **repository root** (`package.json` at the root, patch at `plugin/cordis.patch.yml`), so the git spec installs directly.
+
+**Option B · clone, then install by local path** (when you want to edit the code)
 
 ```bash
-git clone https://github.com/IRwDONE/dsh-structured-output-guard.git
+git clone https://github.com/IRwDONE/dsh-tool-call-leak-fix.git
 ```
 
-Then run `install_bundle` with the **absolute path to `plugin/` inside the clone**:
+Then run `install_bundle` with the **clone directory itself** (the repository root, which holds `package.json`):
 
 ```
-<your-clone-path>\dsh-structured-output-guard\plugin
+<your-clone-path>\dsh-tool-call-leak-fix
 ```
 
-⚠️ The target must be the **package directory** — the one holding `package.json` and `cordis.patch.yml`.
-
-**Option B · one command straight from GitHub (does not work yet)**
-
-```
-https://github.com/IRwDONE/dsh-structured-output-guard
-```
-
-A git spec looks for the package at the **repository root**, and this repo keeps its bundle in the `plugin/` subdirectory, so this form **currently fails**. It will work once the bundle is moved to the root (an optional improvement, not done).
+⚠️ Do **not** point it at the `plugin/` subdirectory — that only holds the implementation (`index.js` / `src/` / `locale/` / `cordis.patch.yml`); the package identity is at the root.
 
 **After installing**
 
@@ -143,7 +143,7 @@ A git spec looks for the package at the **repository root**, and this repo keeps
    If it reports that a restart is required, restart the Harness.
 2. Confirm the row is mounted — check the right place:
    - OK: the Plugin Manager list, or the Harness's Config inspection (it shows
-     `include:structured-output-guard`).
+     `include:tool-call-leak-fix`).
    - OK: the strongest signal is that it actually injects a correction.
    - NOT OK: do **not** grep the profile's
      `~/.dsh/profiles/<profile>/cordis.patch.yml`. A bundle ships **its own**
@@ -246,15 +246,19 @@ Listed because they are the useful part: two of them were only findable by readi
 ## 9. Repository layout
 
 ```text
-plugin/           the installable bundle (package.json + cordis.patch.yml + index.js + src/)
+package.json      the package identity is at the REPOSITORY ROOT — so install_bundle
+                  can be pointed straight at the repo URL
+plugin/           the implementation (no package.json inside)
+  index.js        Host wiring: M2/M3/M4/M7/M9, every listener in try/catch + effect-scoped
   src/detect.js   pure detection core — no DSH imports, runnable under plain node
-  index.js        Host wiring: M2/M3/M4, every listener in try/catch + effect-scoped
-docs/             design, frozen contract (R1–R13), contract dig, prompt texts
-tests/            182 assertions: fixtures for V1/V2/V3 + counter-examples + property tests
+  cordis.patch.yml  the mounting row (an `- insert:` list)
+  locale/*.json   the name and description the Plugin Manager shows (zh/en)
+docs/             design, frozen contract (R1–R19), contract dig, prompt texts
+tests/            193 assertions: fixtures for V1/V2/V3 + counter-examples + property tests
 verify/           independent verification: separate probes + reproduction battery + report
 ```
 
-`plugin/` is the package; everything else is evidence.
+**Package root = repository root** (`package.json` at the root, patch at `plugin/cordis.patch.yml`); `plugin/` holds all the implementation, while `docs` / `tests` / `verify` are the **evidence**.
 
 ## 10. License
 

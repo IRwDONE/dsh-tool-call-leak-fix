@@ -2,7 +2,7 @@
 # verify/run-all.sh — reproducible full verification battery (verifier-owned).
 # Run from the workspace root: bash verify/run-all.sh
 set -u
-ARTIFACTS="plugin/index.js plugin/src/detect.js plugin/package.json plugin/cordis.patch.yml tests/run.mjs docs/INTERFACE.md"
+ARTIFACTS="plugin/index.js plugin/src/detect.js package.json plugin/cordis.patch.yml tests/run.mjs docs/INTERFACE.md"
 
 echo "### GIT HEAD"
 git log --oneline -n 1 2>/dev/null || echo "(no git)"
@@ -23,7 +23,7 @@ done
 
 echo
 echo "### package.json + locale JSON parse"
-node -e 'const fs=require("fs");for(const f of ["plugin/package.json","plugin/locale/zh.json","plugin/locale/en.json"]){const j=JSON.parse(fs.readFileSync(f,"utf8"));console.log("JSON OK ",f, j.name||j.meta&&j.meta.title||"");}'
+node -e 'const fs=require("fs");for(const f of ["package.json","plugin/locale/zh.json","plugin/locale/en.json"]){const j=JSON.parse(fs.readFileSync(f,"utf8"));console.log("JSON OK ",f, j.name||j.meta&&j.meta.title||"");}'
 
 echo
 echo "### cordis.patch.yml insert check"

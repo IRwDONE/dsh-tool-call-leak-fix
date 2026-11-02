@@ -52,7 +52,7 @@ node tests/check-fixtures.mjs   # 回读 fixtures 做完整性/配平诊断（�
 | R6 | `TRUNCATED_PAYLOAD` 的配对走查只在本叶子呈**调用形状**时执行；「调用形状」= 叶子**以开场标记起头**（忽略前导空白），**同时接受** `INVOKE_OPEN` 与 `PARAM_OPEN` 两种起点；方向写反（按"最后一个 token"判定）会同时造成漏报与误报，故断言必须成组锁方向 | `E12[N1]`（`docs/DESIGN.md` 全文不得 deny）、`C3`/`E6`、`M4[R6a]`/`M4[R6b]`/`M4[R6c]`/`M4[R6d]`（方向用例）、`M4[R6-meta]`（用例集必须方向可区分）、`M5`（整轮至少产生过一次） |
 | R7 | 数值门槛必须 **≥1**：`maxLines` / `maxChars` / `closingTagCount` / `endSequenceRepeats` 取 `0`（以及负数 / 非整数 / 非有限数）一律回退默认；**例外** `maxCorrectionsPerTurn` 允许 `0`（= 关闭自动纠偏） | `I9`/`I10`/`I11`/`I12`（端到端：`{endSequenceRepeats:0}` 不得判 `END_SEQUENCE_MULTIPLIED`） |
 | R8 | 字符串叶子遍历有界：最多 **200** 个叶子、最大**深度 24**；该边界必须显式写进 `plugin/README.md` | `M3` |
-| D-0 | 注入消息的 `source` 不得用被 v4 会话格式拒绝的 `kind:"plugin"`，必须是 `runtime-context` 或 `plugin:<pkg>`（`<pkg>` = `plugin/package.json` 的 `name`） | `M1`/`M2`（剥离注释后静态读 `plugin/index.js`；含调用点与 `<pkg>` 一致性校验） |
+| D-0 | 注入消息的 `source` 不得用被 v4 会话格式拒绝的 `kind:"plugin"`，必须是 `runtime-context` 或 `plugin:<pkg>`（`<pkg>` = 仓库根 `package.json` 的 `name`） | `M1`/`M2`（剥离注释后静态读 `plugin/index.js`；含调用点与 `<pkg>` 一致性校验） |
 | R9 | 新增布尔配置 `noopCheck`（默认 `true`）= M3「疑似空转」检测的 kill switch；非布尔回退默认；`false` 时 M3 整体关闭。**自由文本短语匹配已删除**：只有机器可读证据（`written:0`、`unchanged:true`、`status:'no_changes'` 等枚举值）才算空转 | `I15`（默认/采纳/非布尔回退）、`N1`/`N2`/`N7`（自由文本不得误报）、`N3`/`N4`/`N7`（真空转仍抓）、`N5`（kill switch）、`N6`（非写类 / isError / 空 result 不报） |
 | R10 | 新增 `debugLog: boolean`（默认 `false`）与 `debugLogPath: string`（默认 `''`，空串由系统临时目录推导）：`debugLog !== true` 时 logger 直接返回空函数（零开销、零副作用） | `I1`（默认值）/`I2`（键集合）——**logger 的运行时行为在 `plugin/index.js`，纯函数层不可测**（见「已知边界」） |
 | R12 | M5 上下文净化：新增纯函数 `sanitizeMessages(messages, opts)` + `contextGuard: boolean`（默认 `false`）+ `contextGuardNote: string`（默认 `''`，空串=内置本地化注记）→ `DEFAULT_CONFIG` 12 键。只改 `role:'assistant'` **且无 tool-call 块** **且** `scanAssistantText(...).damaged === true` 的消息；改写为单个 text 块（注记），其余字段保留；未改动消息复用原引用、`changed:false` 返回原数组引用；非数组/畸形/循环/Proxy 一律 `changed:false` 不抛；注记与 `rewrites` 不得含 payload | `O0`–`O13` |
@@ -100,7 +100,7 @@ V1/V3 的 payload 里各埋了一个 canary（`CANARY_V1_PAYLOAD_7f3a` / `CANARY
 
 ## 静态 / 文档断言（M 组）
 
-- `M1`/`M2`（D-0）：读 `plugin/index.js` 源码，**先剥离注释**再做静态断言（解释「旧形状为什么被拒绝」的注释是有价值的文档，不该被误伤）：代码区不得出现旧 `source` 形状 `kind:'plugin'`（`dsh-session-format-v3-to-v4` 会抛 `SessionFormatError`，可能弄坏用户会话）；`source: Object.freeze({ kind: <expr> })` 里的 `<expr>` 不得是字面量 `plugin`；代码区必须同时提供 `runtime-context` 与 `plugin:<pkg>` 两种 producer-owned kind，且 `<pkg>` 必须与 `plugin/package.json` 的 `name` 完全一致；所有 `pluginMessage()` 调用点都必须传这两种 kind 之一。
+- `M1`/`M2`（D-0）：读 `plugin/index.js` 源码，**先剥离注释**再做静态断言（解释「旧形状为什么被拒绝」的注释是有价值的文档，不该被误伤）：代码区不得出现旧 `source` 形状 `kind:'plugin'`（`dsh-session-format-v3-to-v4` 会抛 `SessionFormatError`，可能弄坏用户会话）；`source: Object.freeze({ kind: <expr> })` 里的 `<expr>` 不得是字面量 `plugin`；代码区必须同时提供 `runtime-context` 与 `plugin:<pkg>` 两种 producer-owned kind，且 `<pkg>` 必须与仓库根 `package.json` 的 `name` 完全一致；所有 `pluginMessage()` 调用点都必须传这两种 kind 之一。
 - `M3`（R8）：读 `plugin/README.md`，断言写明「≤200 个叶子 / 深度 24」的遍历边界。
 - `M4[R6a]`（起点之一）：以 `PARAM_OPEN` 起头、停在开场标记内、≥2000 字符 → `TRUNCATED_PAYLOAD` → `deny`。**注意：它在"以开场标记起头"与"最后一个 token 是开场标记"两种判据下结论相同，单独存在时锁不住方向**（D-1 教训），保留为基线。
 - `M4[R6b]`（**漏报方向**）：以 `INVOKE_OPEN` 起头、外层信封永不闭合、文本**以 `PARAM_END` 收尾** → 必须 `TRUNCATED_PAYLOAD` + `deny`（反向判据会认为"最后是结束标记 ⇒ 不是调用形状"而漏报）。

@@ -1,0 +1,49 @@
+{
+  "name": "@irwdone/dsh-tool-call-leak-fix",
+  "version": "0.5.0",
+  "private": false,
+  "type": "module",
+  "description": "Fixes DSH's silent failure where a tool call never executes and its markup (antml:-prefixed or bare invoke/parameter tags) leaks into the reply as text: detects and denies damaged calls, self-heals within the same turn, and after a fork voids the damaged output on the model-visible surface. Zero dependencies.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IRwDONE/dsh-tool-call-leak-fix.git"
+  },
+  "homepage": "https://github.com/IRwDONE/dsh-tool-call-leak-fix#readme",
+  "bugs": {
+    "url": "https://github.com/IRwDONE/dsh-tool-call-leak-fix/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "tool-calling",
+    "tool-call",
+    "invoke-tag-leak",
+    "leaked-as-text",
+    "silent-failure",
+    "self-healing",
+    "context-repair",
+    "guard",
+    "plugin"
+  ],
+  "exports": {
+    ".": "./plugin/index.js",
+    "./locale/*.json": "./plugin/locale/*.json",
+    "./icon": "./plugin/icon.svg"
+  },
+  "files": [
+    "plugin/index.js",
+    "plugin/src/detect.js",
+    "plugin/cordis.patch.yml",
+    "plugin/locale/*.json",
+    "plugin/icon.svg",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./plugin/cordis.patch.yml"
+    }
+  }
+}
