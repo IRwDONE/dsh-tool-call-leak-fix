@@ -98,7 +98,7 @@
   → 只含文本的 assistant 输出 = `{kind:'completed'}`，**没有异常、没有 tool 事件**。
 
 **(e) 全树无文本协议解析器**
-- grep（对整个解包树 `...\Temp\extracted-asar\dshx`）：`antml|function_calls|</parameter>` → 仅 2 条命中，均在
+- grep（对整个解包树 `<tmp>\<解包目录>\dshx`）：`antml|function_calls|</parameter>` → 仅 2 条命中，均在
   `...\@deepseek-ai\dsh-experimental-inspector\lib\devtools\entrypoints\lighthouse_worker\lighthouse_worker.js:190795,190838`，内容是 `"javascript.operators.spread.spread_in_function_calls"` 之类的 i18n key，**与工具调用无关**。
 - grep `invoke name=` / `<parameter name=`（在 `@deepseek-ai/**`，含各包 `lib/index.js`）→ 0 条工具协议命中（其余为 typert 的 `validateWireName('parameter name', ...)` 等无关命中）。
 
@@ -270,9 +270,9 @@ locale 内容（`host-plugin.md:38-42`）：`{ "meta": { "title": "My Decoration
         config:
           serverName: searxng
           transport: stdio
-          command: 'C:\Users\<user>\.dsh\<redacted-path>'
+          command: '<node.exe 的本机路径>'
           args:
-            - '<redacted-path>'
+            - '<<mcp-script> 的本机路径>'
           ...
   ```
 - 出厂 patch 同样用 `- insert:`：`...\@deepseek-ai\dsh-web-app\cordis.patch.yml:44,590`、`dsh-base\cordis.patch.yml:15`、`dsh-acp-app\cordis.patch.yml:11`、`dsh-headless\cordis.patch.yml:19`、`dsh-sdk-app\cordis.patch.yml:11,28` 等 20+ 处（grep `insert:` with `include=cordis.patch.yml`）。
