@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Structured Output Guard",
-    "description": "Detects lost tool-call argument boundaries (multiplied end sequences, missing opening markup, markup leaked as prose), denies damaged calls, and self-heals once within the same turn."
+    "title": "dsh-structured-output-guard",
+    "description": "Fixes the silent failure where a tool call never runs and its markup (invoke / parameter tags, antml:-prefixed or bare) leaks into the reply as text: detects and denies damaged calls, self-heals within the same turn, and after a fork voids damaged output on the model-visible surface (zero extra model calls)."
   }
 }

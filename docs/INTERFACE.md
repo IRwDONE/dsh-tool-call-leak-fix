@@ -437,12 +437,21 @@ silentFailure === (damaged === true && meta?.hasToolCalls === false)
 
 **裁定 R18（2026-11-01）—— M9 初版「闲置压缩」：把被污染的历史交给 harness 自己压掉**
 
-> ⚠️ **本裁定已被 R19 取代（同日）。** 原因：契约（`ctx.compaction`）**存在**，但在这台 harness 上
-> **服务没有被挂载** —— 两条独立实测：① 激活时刻与事件时刻 `ctx.get('compaction')` 都是 `false`；
-> ② 对照组 `commands` / `llm` / `tools` / `agentLoop` / `systemPrompt` 都是 `true`（证明取法正确），
-> 且**全局作用域与 agent 作用域**都取不到。全语料里也**从未出现过 `compaction/` 事件**。
-> 因此本裁定描述的机制**在本 build 上不可达**：`autoCompact` 键已删除，改用 R19 的 `repairContext`。
+> ⚠️ **本裁定已被 R19 取代（同日）。** 原因：契约（`ctx.compaction`）**存在**，但
+> **从 profile 插件的 `ctx.get('compaction')` 取不到它** —— 两条实测：① 激活时刻与事件时刻都是
+> `false`；② 对照组 `commands` / `llm` / `tools` / `agentLoop` / `systemPrompt` 都是 `true`
+> （证明取法正确），全局与 **agent 作用域**都取不到。
+> 因此本裁定描述的**这条调用路径**不可达：`autoCompact` 键已删除，改用 R19 的 `repairContext`。
 > 以下保留为审计记录（记录我们如何走到 R19）。
+>
+> 📌 **后续更正（2026-11-03，务必与上面的结论一起读）**：压缩**并不是"没挂载"**。在同一台 harness 的
+> 真实会话里观测到一个 **`compact-checkpoint`** 事件：
+> `type=user/message`、`source.kind="compact-checkpoint"`、
+> `surfaceOp={"op":"replace","startSeq":13,"endSeq":2902,"sourceEventSeqs":[1041 个]}`，
+> 正文是"This is an automatically generated checkpoint condensing an earlier span…"。
+> 即：**harness 自己会压缩，而且它用的是与 R19 完全相同的手法**（`user/message` + `surfaceOp.replace`
+> + `sourceEventSeqs` 覆盖**全部**被遮蔽节点）。所以准确的表述是"**插件取不到这个服务**"，而不是
+> "服务不存在"；R19 的选择也因此被**独立印证**为 harness 原生方式。
 
 - **它要解决的现场**：一次真实 fork（`session-c4f8b81c`，turn 27）里，插件的每一环**都执行了**
   （`session/event.scan` 命中 → tier 1 注入 → 又写坏 → tier 2 注入 → turn 结束），
@@ -493,7 +502,12 @@ silentFailure === (damaged === true && meta?.hasToolCalls === false)
 - **触发与范围**：在 `agent/turn-stopping`（M4 已在同一缝做 append，安全性有实证）执行，
   **先修复、后注入纠正**。两类目标：① 本 turn 由 `session/event` 观察到的损坏节点（按 `seq` 记下）；
   ② **fork 继承来**的损坏节点——它们不进我们的事件流，因此**每 session 扫一次 surface**：
-  只扫 `!session.isOwnSeq(seq)` 的节点，上限 2000，触顶时日志记 `capped:true`（诚实标注，不静默截断）。
+  **扫描覆盖 surface 上的全部节点（含 `isOwnSeq`）**，上限 5000，触顶时日志记 `capped:true`
+  （诚实标注，不静默截断）。
+  ⚠️ **这是一处被现场证据修正过的设计**：初版**跳过** `isOwnSeq` 的节点（假设"自己的损坏靠观察器收集"），
+  结果在一个真实会话里，两个更早的损坏步骤（`seq=3605` / `4353`，`calls=0`）**一直留在模型可见面上**
+  —— 因为它们发生在 R19 上线之前，观察器当时还没在收集，而扫描又跳过了自己的节点。
+  现在改为全扫（`Set` 天然去重），并在日志里分别记 `own` / `inherited` 计数。
 - **自验证（本裁定的核心安全设计）**：`surfaceOp.replace` 的语义**在语料里没有任何真实样例**
   （全语料只有 `surfaceOp:"append"`），所以**绝不拿真实消息去试**：
   先用**自建探针节点**自检一次（append 探针 → 用 replace 遮蔽它 → 检查 surface 中探针消失、替换节点在列）。

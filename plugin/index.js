@@ -457,22 +457,34 @@ export function apply(ctx, rawConfig) {
       repairState.set(sessionId, state);
     }
 
-    // Once per session: a fork's inherited steps never reach our event feed, so
-    // look for damaged ones on the surface itself.
+    // Once per session, scan the surface itself — ALL of it, own nodes included.
+    // Inherited steps never reach our event feed at all, and own damage can
+    // predate this plugin (or a reload), in which case the observer never
+    // collected it. Skipping own nodes left exactly that damage visible: observed
+    // live in one session (two damaged steps 3605/4353 stayed in the surface
+    // while only the newest one got shadowed). nodeSeq is deduped by the Set.
     if (!state.scanned) {
       state.scanned = true;
       try {
         const nodes = session.surface.nodes;
-        const cap = 2000;
+        const cap = 5000;
         let inherited = 0;
+        let own = 0;
         for (let i = Math.max(0, nodes.length - cap); i < nodes.length; i += 1) {
           const seq = nodes[i];
-          if (session.isOwnSeq(seq)) continue; // own damage arrives via the observer
-          inherited += 1;
+          if (session.isOwnSeq(seq)) own += 1;
+          else inherited += 1;
           const judge = judgeAssistantEvent(session.eventAt(seq));
           if (judge && judge.scan.damaged === true && judge.toolCallCount === 0) noteDamaged(sessionId, seq);
         }
-        log({ where: 'repair.scanned', sessionId, surfaceNodes: nodes.length, inherited, capped: nodes.length > cap });
+        log({
+          where: 'repair.scanned',
+          sessionId,
+          surfaceNodes: nodes.length,
+          inherited,
+          own,
+          capped: nodes.length > cap,
+        });
       } catch {
         /* observation only */
       }
