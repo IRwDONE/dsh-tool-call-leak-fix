@@ -6,6 +6,7 @@ Host 插件。针对**工具调用参数边界丢失**（模型侧结构化输�
   > **确认本地插件是否更新**：看插件管理器里这个 bundle 的**版本号**；或直接看 profile 的
   > `node_modules/@irwdone/dsh-tool-call-leak-fix/package.json`（本机是 `link:`，指向**本仓库根**）。
 - 依赖：**零依赖**、零构建、纯 JS（ESM）。检测核心 `src/detect.js` 是纯函数，可在普通 node 下直接跑。
+- **兼容性（2026-11-09 实测）**：在 **DSH 0.2.2-rc.1** 上通过 —— 模块正常 `apply`；M2/M4/M7/M9 均在新版上真实跑过（含 M4 端到端：损坏步骤 → 注入纠正 → 模型同 turn 重发调用）；`session.append`/`SurfaceOp`/`SurfaceIntent`/`PreStepDecision`/`tools/pre-execute` 契约比对未变。0.2.1-rc.5 亦通过。
 
 ## 它做什么
 
