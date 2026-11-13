@@ -10,7 +10,7 @@ It does four things: **block** a damaged call → **correct inside the same turn
 
 > Status: usable. `M2` (block), `M4` (self-heal), `M7` (fork brief) and `M9` (context repair) are all **field-verified**; what is not possible (e.g. `M5` rewriting history) is in [Limitations](#8-limitations).
 
-> **Compatibility**: **measured on DSH 0.2.2-rc.1** (2026-11-09) — the module loads (`apply`), all four mechanisms ran on the new build, and every seam contract it relies on is unchanged; 0.2.1-rc.5 also passes. It is **zero-dependency and zero-build**, so it does not drift with harness versions.
+> **Compatibility**: **measured on DSH 0.2.2-rc.3** (2026-11-13) — the module loads (`apply`); `M2` was observed blocking a damaged call in a real session; and every seam it relies on is unchanged on that build (`tools/pre-execute`, `tools/post-execute`, `agent/pre-step`, `agent/turn-stopping`, `session/event`, `session.append`/`surfaceOp`/`sourceEventSeqs`, `Config['~standard']`, and the `dsh.bundle.patch` manifest). 0.2.2-rc.1 (all four mechanisms ran) and 0.2.1-rc.5 also pass. It is **zero-dependency and zero-build**, so it does not drift with harness versions.
 
 ---
 
@@ -200,7 +200,7 @@ Verification is split deliberately: "the code does what the contract says" is pr
 | `M2` blocks a damaged call instead of silently failing | ✅ **observed live** | A real call with a ≥22-line, structure-truncated argument was rejected at dispatch, and the target file was confirmed **not created** |
 | `M4` keeps the turn open and the model continues | ✅ **observed live, in a real user session** | In a genuine session: `damaged:true, silentFailure:true` → `turn-stopping` found the record → `agent.inject()` (`kind=runtime-context`) → `agent/inbox/spliced` → **a new `step/start` in the same turn** |
 | `M3` fires only on explicit, machine-readable no-op evidence | ✅ probed | Independent probe; the earlier free-text heuristic was **removed** after it misfired 5 times in real sessions |
-| Works on the current harness (**0.2.2-rc.1**) | ✅ **measured** | Module loads (`apply`); M4 **end-to-end** (damaged step → correction → **the model re-issued the call in the same turn**); M7's fork brief fired; M9 `selfTest ok:true` plus a real `repair.applied`; `session.append`/`SurfaceOp`/`SurfaceIntent`/`PreStepDecision`/`tools/pre-execute` contracts unchanged |
+| Works on the current harness (**0.2.2-rc.3**) | ✅ **measured** | Module loads (`apply`); **`M2` observed live**: a real call with ≥22 lines and a doubled trailing end sequence was rejected at dispatch; every seam contract compared line by line against the rc.3 sources (`tools/pre-execute`, `tools/post-execute`, `agent/pre-step`, `agent/turn-stopping` — payload still carries `agent` — `session/event`, `session.append`/`SurfaceOp`/`SurfaceIntent`/`PreStepDecision`, `Config['~standard']`, `dsh.bundle.patch`). The **end-to-end M4 run**, M7's fork brief and M9 `selfTest ok:true` + a real `repair.applied` were measured on **0.2.2-rc.1**; those seams are unchanged on rc.3 |
 | Detector contract (shapes, rulings, purity) | ✅ probed | **480** independent detector assertions + **102** independent wiring assertions, plus the author's **187**, all green |
 | `M1` prevention prompt | ➖ **removed by design** | Prompt-level rules are not enforceable and dilute attention |
 | `M5` history rewriting | ❌ **impossible on this build** | See D-8 in [Limitations](#8-limitations) |

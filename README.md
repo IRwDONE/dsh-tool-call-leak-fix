@@ -10,7 +10,7 @@
 
 > 状态：可用。`M2`（拦截）、`M4`（自愈）、`M7`（fork 简报）、`M9`（上下文修复）均已**现场验证**；做不到的部分（如 `M5` 改写历史）见「已知边界」。
 
-> **兼容性**：已在 **DSH 0.2.2-rc.1**（2026-11-09）上**实测通过** —— 模块正常 `apply`、四个机制在新版上全部跑过、所需接缝契约逐一比对未变；0.2.1-rc.5 亦通过。**零依赖、零构建**，所以不会随 harness 版本漂移。
+> **兼容性**：已在 **DSH 0.2.2-rc.3**（2026-11-13）上**实测通过** —— 模块正常 `apply`；`M2` 在真实会话里现场拦下过一次损坏调用；`tools/pre-execute`、`tools/post-execute`、`agent/pre-step`、`agent/turn-stopping`、`session/event`、`session.append`/`surfaceOp`/`sourceEventSeqs`、`Config['~standard']` 与 `dsh.bundle.patch` 清单契约逐条比对未变。0.2.2-rc.1（四个机制全部跑过）与 0.2.1-rc.5 亦通过。**零依赖、零构建**，所以不会随 harness 版本漂移。
 
 ---
 
@@ -197,7 +197,7 @@ git clone https://github.com/IRwDONE/dsh-tool-call-leak-fix.git
 | `M2` 真的拦住了损坏调用 | ✅ **现场观测** | 一次真实的、22 行以上且结构截断的参数在分发前被拒，并确认目标文件**未被创建** |
 | `M4` 让 turn 不关闭并继续 | ✅ **现场观测** | 诊断日志完整链条：`damaged:true, silentFailure:true` → `turn-stopping` 命中记录 → `agent.inject()` 成功 → `agent/inbox/spliced` → **同一 turn 号内新开一步** |
 | `M3` 只认显式证据 | ✅ 探针 | 独立探针；早先的自由文本启发式在真实会话误报 5 次后**已删除** |
-| 在当前 harness（**0.2.2-rc.1**）上可用 | ✅ **实测** | 模块加载（`apply`）；M4 **端到端**（损坏步骤 → 注入纠正 → **模型在同一 turn 内重发调用**）；M7 的 fork 简报真实触发；M9 `selfTest ok:true` 且真实 `repair.applied`；`session.append`/`SurfaceOp`/`SurfaceIntent`/`PreStepDecision`/`tools/pre-execute` 契约比对未变 |
+| 在当前 harness（**0.2.2-rc.3**）上可用 | ✅ **实测** | 模块加载（`apply`）；**M2 现场拦下**：一次 22 行以上、尾部连续两个结束序列的真实调用在分发前被拒；接缝契约与 rc.3 源码逐条比对未变（`tools/pre-execute`、`tools/post-execute`、`agent/pre-step`、`agent/turn-stopping` 的 payload 仍带 `agent`、`session/event`、`session.append`/`SurfaceOp`/`SurfaceIntent`/`PreStepDecision`、`Config['~standard']`、`dsh.bundle.patch`）。M4 **端到端**、M7 简报、M9 `selfTest ok:true` + 真实 `repair.applied` 是在 **0.2.2-rc.1** 上观测的，rc.3 上这些机制的接缝未变 |
 | 检测器契约（形状、裁定、纯函数纪律） | ✅ 探针 | 独立 **480** 条检测器断言 + **102** 条接线断言，加作者测试台 **187** 条，**全绿** |
 | `M1` 预防提示词 | ➖ **按设计移除** | 提示词层约束力不保证，且会分散 attention |
 | `M5` 改写历史 | ❌ **本版做不到** | 见「已知边界」D-8 |
